@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blinkwise</title>
+<style>
+:root{
+  --bg:#f5f7fa; --card:#ffffff; --ink:#18202b; --muted:#5d6b7e; --line:#e3e8ef;
+  --accent:#138a6d; --accent-soft:#d6f1e8; --warn:#b26a00; --warn-soft:#fdf0d8;
+  --bad:#c0392b; --bad-soft:#fbe1de; --band:#d6f1e8; --track:#e9edf2;
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1318; --card:#171c23; --ink:#e9eef5; --muted:#9aa7b8; --line:#273040;
+    --accent:#5cc8a8; --accent-soft:#163a31; --warn:#f0b44c; --warn-soft:#3a2d12;
+    --bad:#ff7a6b; --bad-soft:#3d1c18; --band:#173a31; --track:#232b36;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1318; --card:#171c23; --ink:#e9eef5; --muted:#9aa7b8; --line:#273040;
+  --accent:#5cc8a8; --accent-soft:#163a31; --warn:#f0b44c; --warn-soft:#3a2d12;
+  --bad:#ff7a6b; --bad-soft:#3d1c18; --band:#173a31; --track:#232b36; --shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+header h1{font-size:20px;margin:0;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.pill{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--track);color:var(--muted)}
+.pill.on{background:var(--accent-soft);color:var(--accent)}
+.pill.off{background:var(--warn-soft);color:var(--warn)}
+.spacer{flex:1}
+button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+  border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(12,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);min-width:0}
+.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
+@media (max-width:900px){.c3{grid-column:span 6}.c4,.c5,.c6,.c7,.c8{grid-column:span 12}}
+@media (max-width:560px){.c3{grid-column:span 12}}
+.label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 6px}
+.big{font-size:40px;font-weight:650;letter-spacing:-.02em;line-height:1.1}
+.big small{font-size:15px;font-weight:500;color:var(--muted);margin-left:4px}
+.sub{color:var(--muted);font-size:13px}
+.gauge{position:relative;height:10px;border-radius:6px;background:var(--track);margin:14px 0 6px;overflow:visible}
+.gauge .band{position:absolute;top:0;bottom:0;background:var(--band);border-radius:6px}
+.gauge .mark{position:absolute;top:-5px;width:4px;height:20px;border-radius:2px;background:var(--ink);transition:left .6s}
+.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+.ok{color:var(--accent)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+h2{font-size:15px;margin:0 0 10px}
+svg text{fill:var(--muted);font-size:11px}
+.sugg{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.sugg:first-of-type{border-top:0}
+.chip{flex:none;font-size:11px;padding:2px 8px;border-radius:999px;height:fit-content;margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
+.chip.info{background:var(--track);color:var(--muted)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.high{background:var(--bad-soft);color:var(--bad)}
+.sugg p{margin:2px 0 0;color:var(--muted);font-size:14px}
+details summary{cursor:pointer;color:var(--accent);font-size:13px;margin-top:4px}
+.refs{font-size:12px;color:var(--muted);margin:6px 0 0;padding-left:18px}
+.refs a{color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:500}
+.tablewrap{overflow-x:auto}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
+.kv div:nth-child(odd){color:var(--muted)}
+.empty{color:var(--muted);font-size:14px;padding:8px 0}
+footer{margin-top:22px;color:var(--muted);font-size:12px}
+footer a{color:var(--accent)}
+.ring{display:flex;align-items:center;gap:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>
+      <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+      Blinkwise
+    </h1>
+    <span id="status" class="pill">connecting...</span>
+    <span class="spacer"></span>
+    <button id="pauseBtn" hidden>Pause camera</button>
+    <button id="breakBtn" hidden>Take a break now</button>
+    <button id="themeBtn" title="Toggle theme">Theme</button>
+  </header>
+
+  <div class="grid">
+    <section class="card c3">
+      <p class="label">Blink rate (last 5 min)</p>
+      <div class="big" id="rate">--<small>/min</small></div>
+      <div class="gauge" aria-hidden="true"><div class="band" style="left:50%;width:16.7%"></div><div class="mark" id="rateMark" style="left:0"></div></div>
+      <div class="ticks"><span>0</span><span>10</span><span>20</span><span>30</span></div>
+      <p class="sub" id="rateNote">Relaxed eyes blink about 15-20 times a minute.</p>
+    </section>
+    <section class="card c3">
+      <p class="label">Since your last blink</p>
+      <div class="ring">
+        <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--track)" stroke-width="7"/><circle id="stareArc" cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" transform="rotate(-90 32 32)" stroke-dasharray="0 170"/></svg>
+        <div class="big" id="stare">--<small>s</small></div>
+      </div>
+      <p class="sub" id="stareNote">A gentle cue appears if you stare too long.</p>
+    </section>
+    <section class="card c3">
+      <p class="label">Full blinks (last 10 min)</p>
+      <div class="big" id="complete">--<small>%</small></div>
+      <p class="sub" id="completeNote">Partial blinks leave the lower cornea dry. Symptoms track them more closely than blink rate.</p>
+    </section>
+    <section class="card c3">
+      <p class="label">Next break</p>
+      <div class="big" id="nextBreak">--</div>
+      <p class="sub" id="breakNote">20-20-20: every 20 min, look 6 m away for 20 s.</p>
+    </section>
+
+    <section class="card c8">
+      <h2>Blink rate today</h2>
+      <div id="chart"><div class="empty">History appears after a few minutes.</div></div>
+    </section>
+    <section class="card c4">
+      <h2>Your screens</h2>
+      <div id="screens"><div class="empty">Learning your setup (needs about a minute)...</div></div>
+    </section>
+
+    <section class="card c7">
+      <h2>Suggestions</h2>
+      <div id="suggestions"><div class="empty">Nothing yet. Suggestions appear once there's enough data (a few minutes).</div></div>
+    </section>
+    <section class="card c5">
+      <h2>Posture and environment</h2>
+      <div class="kv" id="env"></div>
+      <p class="sub" style="margin-top:10px">Distance is estimated from your iris size (about 11.7 mm in most adults). Run <code>blinkwise calibrate</code> for better accuracy.</p>
+    </section>
+
+    <section class="card c12">
+      <h2>Last 14 days</h2>
+      <div class="tablewrap" id="days"><div class="empty">No history yet.</div></div>
+    </section>
+
+    <section class="card c12">
+      <h2>The science behind the suggestions</h2>
+      <div id="science" class="sub"></div>
+    </section>
+  </div>
+  <footer>
+    All processing happens on this computer. Blinkwise never stores or sends camera images; it keeps only per-minute numbers locally.
+    Not a medical device. See an eye-care professional for persistent dryness, pain or blurred vision.
+  </footer>
+</div>
+
+<script>
+const TOKEN = "__BLINKWISE_TOKEN__";
+const $ = id => document.getElementById(id);
+let refs = {}, live = null;
+
+function themeInit(){
+  let t = null; try { t = localStorage.getItem("bw-theme"); } catch(e){}
+  if (t) document.documentElement.dataset.theme = t;
+  $("themeBtn").onclick = () => {
+    const cur = document.documentElement.dataset.theme ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("bw-theme", next); } catch(e){}
+  };
+}
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function cls(rate){ return rate == null ? "" : rate < 6 ? "bad" : rate < 10 ? "warn" : "ok"; }
+function fmtDur(s){ s = Math.max(0, Math.round(s)); const m = Math.floor(s/60); return m >= 1 ? `${m} min` : `${s} s`; }
+
+async function action(a){
+  const r = await fetch("/api/action", {method:"POST", headers:{"Content-Type":"application/json","X-Blinkwise-Token":TOKEN}, body:JSON.stringify({action:a})});
+  if (r.ok) refreshLive();
+}
+
+async function refreshLive(){
+  let d;
+  try { d = await (await fetch("/api/live")).json(); } catch(e){ $("status").textContent = "offline"; $("status").className = "pill off"; return; }
+  live = d;
+  const st = $("status");
+  if (!d.running){ st.textContent = "history only"; st.className = "pill"; return; }
+  $("pauseBtn").hidden = false; $("breakBtn").hidden = false;
+  $("pauseBtn").textContent = d.paused ? "Resume camera" : "Pause camera";
+  $("pauseBtn").onclick = () => action(d.paused ? "resume" : "pause");
+  $("breakBtn").onclick = () => action(d.break_active ? "skip_break" : "break_now");
+  $("breakBtn").textContent = d.break_active ? "Skip break" : "Take a break now";
+  if (d.paused){ st.textContent = "paused - camera off"; st.className = "pill off"; }
+  else if (d.demo){ st.textContent = "demo (simulated user)"; st.className = "pill on"; }
+  else if (!d.face){ st.textContent = "no face in view"; st.className = "pill off"; }
+  else { st.textContent = `watching - ${d.fps} fps`; st.className = "pill on"; }
+
+  const r = d.blink_rate_5m ?? d.blink_rate_1m;
+  $("rate").innerHTML = `<span class="${cls(r)}">${r == null ? "--" : Math.round(r)}</span><small>/min</small>`;
+  $("rateMark").style.left = `calc(${Math.min(30, r ?? 0)/30*100}% - 2px)`;
+  $("rateNote").textContent = r == null ? "Measuring... needs about 30 s of your eyes in view." :
+    r < 6 ? "Very low. Your tear film has a long time to dry between blinks." :
+    r < 10 ? "Low, which is typical on screens. Try some slow, full blinks." :
+    r < 15 ? "OK. Relaxed eyes blink about 15-20 times a minute." : "Healthy blink rate.";
+
+  const s = d.seconds_since_blink, lim = d.stare_seconds || 10;
+  $("stare").innerHTML = `${s == null ? "--" : Math.round(s)}<small>s</small>`;
+  const frac = s == null ? 0 : Math.min(1, s/lim);
+  const arc = $("stareArc"); arc.setAttribute("stroke-dasharray", `${(frac*169.6).toFixed(1)} 170`);
+  arc.setAttribute("stroke", frac >= 1 ? "var(--bad)" : frac > .6 ? "var(--warn)" : "var(--accent)");
+
+  if (!d.completeness_available){
+    $("complete").innerHTML = `--<small>%</small>`;
+    $("completeNote").textContent = "Needs a camera running at 20+ fps to judge blink completeness.";
+  } else if (d.incomplete_ratio_10m == null){
+    $("complete").innerHTML = `--<small>%</small>`;
+  } else {
+    const c = Math.round((1 - d.incomplete_ratio_10m) * 100);
+    $("complete").innerHTML = `<span class="${c < 60 ? "warn" : "ok"}">${c}</span><small>%</small>`;
+  }
+
+  $("nextBreak").textContent = d.break_active ? "now" : fmtDur(d.next_break_s ?? 0);
+  const bc = d.breaks_completed || {}, bm = d.breaks_missed || {};
+  $("breakNote").textContent = `Breaks taken: ${(bc.micro||0)+(bc.long||0)}, missed: ${(bm.micro||0)+(bm.long||0)}. Screen time this session: ${Math.round(d.screen_minutes||0)} min.`;
+
+  renderScreens(d); renderEnv(d); renderSuggestions(d.suggestions || []);
+}
+
+function renderEnv(d){
+  const rows = [];
+  const dist = d.distance_cm;
+  rows.push(["Viewing distance", dist == null ? "--" : `<span class="${dist < 50 ? "warn" : "ok"}">${dist} cm</span> <span class="sub">(aim 50-70)</span>`]);
+  rows.push(["Head tilt", d.head_pitch == null ? "--" : `${d.head_pitch > 0 ? "up" : "down"} ${Math.abs(d.head_pitch)} deg`]);
+  rows.push(["Lighting on your face", d.luminance == null ? "--" : d.luminance < 45 ? `<span class="warn">dim</span>` : "OK"]);
+  rows.push(["Displays connected", d.monitors_connected ?? "unknown"]);
+  rows.push(["Long blinks (fatigue)", d.long_blinks_per_min_10m == null ? "--" : `${d.long_blinks_per_min_10m}/min`]);
+  $("env").innerHTML = rows.map(([k,v]) => `<div>${k}</div><div>${v}</div>`).join("");
+}
+
+function renderScreens(d){
+  const z = d.zones || [];
+  if (!z.length){ return; }
+  const W = 300, H = 170, cx = W/2, cy = H - 18, R = 130;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Top-down view of where you look">`;
+  svg += `<circle cx="${cx}" cy="${cy}" r="11" fill="var(--track)" stroke="var(--muted)"/>`;
+  svg += `<text x="${cx}" y="${cy+4}" text-anchor="middle" style="font-size:9px">you</text>`;
+  for (const zz of z){
+    const a = (zz.yaw) * Math.PI/180;              // 0 = straight ahead (up in this view)
+    const span = 26 * Math.PI/180;
+    const x1 = cx + R*Math.sin(a - span/2), y1 = cy - R*Math.cos(a - span/2);
+    const x2 = cx + R*Math.sin(a + span/2), y2 = cy - R*Math.cos(a + span/2);
+    const cur = d.current_zone === zz.index;
+    const w = 4 + 10*zz.share;
+    svg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${cur ? "var(--accent)" : "var(--muted)"}" stroke-width="${w.toFixed(1)}" stroke-linecap="round"/>`;
+    const lx = cx + (R-30)*Math.sin(a), ly = cy - (R-30)*Math.cos(a);
+    svg += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" style="fill:var(--ink);font-size:12px">${Math.round(zz.share*100)}%</text>`;
+    svg += `<text x="${lx.toFixed(1)}" y="${(ly+14).toFixed(1)}" text-anchor="middle">${zz.blink_rate == null ? "" : Math.round(zz.blink_rate) + "/min"}</text>`;
+  }
+  svg += `</svg>`;
+  const n = z.length;
+  const note = `${n} screen${n>1?"s":""} in active use${d.monitors_connected ? ` (${d.monitors_connected} connected)` : ""} - ${d.switches_per_min} switches/min.`;
+  $("screens").innerHTML = svg + `<p class="sub">${note} Line width shows share of time; labels show blink rate per screen.</p>`;
+}
+
+function renderSuggestions(list){
+  if (!list.length) return;
+  $("suggestions").innerHTML = list.map(s => `
+    <div class="sugg">
+      <span class="chip ${esc(s.severity)}">${esc(s.severity === "high" ? "important" : s.severity === "warn" ? "tip" : "insight")}</span>
+      <div><strong>${esc(s.title)}</strong><p>${esc(s.message)}</p>
+        ${s.refs && s.refs.length ? `<details><summary>Why? (${s.refs.length} source${s.refs.length>1?"s":""})</summary><ul class="refs">${s.refs.map(k => refs[k] ? `<li>${esc(refs[k].finding)} <a href="${esc(refs[k].url)}" target="_blank" rel="noopener noreferrer">${esc(refs[k].citation.split(".")[0])}</a></li>` : "").join("")}</ul></details>` : ""}
+      </div>
+    </div>`).join("");
+}
+
+function renderChart(minutes){
+  if (!minutes || minutes.length < 3) return;
+  // 5-minute rolling blink rate over observed time.
+  const pts = [];
+  for (let i = 0; i < minutes.length; i++){
+    let obs = 0, b = 0;
+    for (let j = Math.max(0, i-4); j <= i; j++){ obs += minutes[j].observed_s; b += minutes[j].blinks; }
+    if (obs >= 60) pts.push([minutes[i].ts, b/obs*60]);
+  }
+  if (pts.length < 2) return;
+  const W = 760, H = 220, L = 34, B = 24, T = 8, Rr = 8;
+  const t0 = pts[0][0], t1 = pts[pts.length-1][0];
+  const ymax = Math.max(30, ...pts.map(p => p[1]));
+  const X = t => L + (t - t0) / Math.max(1, t1 - t0) * (W - L - Rr);
+  const Y = v => T + (1 - v/ymax) * (H - T - B);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Blink rate over time">`;
+  svg += `<rect x="${L}" y="${Y(20)}" width="${W-L-Rr}" height="${Y(15)-Y(20)}" fill="var(--band)"/>`;
+  svg += `<text x="${W-Rr-4}" y="${Y(20)+12}" text-anchor="end">relaxed range 15-20</text>`;
+  for (const v of [0,10,20,30]) {
+    svg += `<line x1="${L}" x2="${W-Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${v}</text>`;
+  }
+  const hrs = (t1 - t0) / 3600, step = hrs > 4 ? 3600 : hrs > 1 ? 1800 : 600;
+  for (let t = Math.ceil(t0/step)*step; t <= t1; t += step){
+    const d = new Date(t*1000);
+    svg += `<text x="${X(t)}" y="${H-6}" text-anchor="middle">${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}</text>`;
+  }
+  let path = "", prev = null;
+  for (const [t, v] of pts){
+    const gap = prev && (t - prev > 300);
+    path += `${!prev || gap ? "M" : "L"}${X(t).toFixed(1)},${Y(v).toFixed(1)}`;
+    prev = t;
+  }
+  svg += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  svg += `</svg>`;
+  $("chart").innerHTML = svg;
+}
+
+function renderDays(days){
+  if (!days || !days.length) return;
+  const head = `<tr><th>Day</th><th>Screen time</th><th>Blink rate</th><th>Full blinks</th><th>Longest stare</th><th>Distance</th><th>Screens</th><th>Breaks taken / missed</th></tr>`;
+  const rows = days.slice().reverse().map(d => `<tr>
+    <td>${esc(d.day)}</td><td>${Math.floor(d.screen_minutes/60)}h ${Math.round(d.screen_minutes%60)}m</td>
+    <td class="${cls(d.blink_rate)}">${d.blink_rate ?? "--"}/min</td>
+    <td>${d.incomplete_ratio == null ? "--" : Math.round((1-d.incomplete_ratio)*100) + "%"}</td>
+    <td>${d.longest_stare_s == null ? "--" : Math.round(d.longest_stare_s) + " s"}</td>
+    <td>${d.distance_cm ?? "--"} cm</td><td>${d.screens ?? "--"}</td>
+    <td>${d.breaks_taken} / ${d.breaks_missed}</td></tr>`).join("");
+  $("days").innerHTML = `<table>${head}${rows}</table>`;
+}
+
+async function refreshHistory(){
+  try {
+    const h = await (await fetch("/api/history?days=14&hours=10")).json();
+    renderChart(h.minutes); renderDays(h.daily);
+  } catch(e){}
+}
+
+async function loadScience(){
+  const list = await (await fetch("/api/science")).json();
+  refs = Object.fromEntries(list.map(r => [r.key, r]));
+  $("science").innerHTML = `<ul class="refs">` + list.map(r =>
+    `<li><strong>${esc(r.finding)}</strong><br>${esc(r.citation)} <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">link</a></li>`).join("") + `</ul>`;
+}
+
+themeInit();
+loadScience().then(refreshLive);
+refreshHistory();
+setInterval(refreshLive, 1000);
+setInterval(refreshHistory, 30000);
+</script>
+</body>
+</html>

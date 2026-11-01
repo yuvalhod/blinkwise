@@ -1,0 +1,9 @@
+{
+  "video": "head-pose-face-detection-female.mp4",
+  "source": "https://github.com/intel-iot-devkit/sample-videos (Apache-2.0)",
+  "fps": 12.0,
+  "labelling": "Hand-labelled frame-by-frame from eye-region contact sheets. Each value is the frame index where the lids are most closed. Excluded ranges are extreme head turns / profile views / sustained downward gaze where ground truth cannot be determined reliably; detections there are neither rewarded nor penalised. 'ambiguous' frames are partial lid movements a human annotator could not call confidently.",
+  "blinks": [3, 22, 55, 178, 319, 338, 366, 390, 416, 453, 567, 593, 608, 628, 758, 763, 815, 877, 899, 909, 924, 937, 1093, 1109, 1165, 1305, 1321, 1463, 1473, 1572, 1609],
+  "ambiguous": [[376, 381], [911, 917]],
+  "excluded": [[72, 150], [205, 290], [490, 560], [655, 748], [995, 1055], [1192, 1282], [1352, 1418], [1484, 1562]]
+}
