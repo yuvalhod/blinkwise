@@ -29,6 +29,7 @@ Validated against hand-labelled real video in tests/data (see scripts/eval_blink
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from dataclasses import dataclass
 from typing import Deque, List, Optional, Tuple
@@ -58,7 +59,7 @@ class BlinkParams:
     after_s: float = 0.7            # ...and this far ahead for the re-opened level (= latency)
     local_s: float = 0.15           # the minimum must be the lowest point within +/- this
     min_prominence: float = 0.20    # dip depth in openness units (1.0 = open eye)...
-    min_rel_prominence: float = 0.25  # ...and relative to the surrounding open level
+    min_rel_prominence: float = 0.20  # ...and relative to the surrounding open level
     complete_closure: float = 0.6   # closure depth >= this is a complete blink
     max_blink_s: float = 0.5        # spontaneous blinks are ~100-400 ms
     max_event_s: float = 1.0        # wider dips are eye closures / gaze changes, not blinks
@@ -68,6 +69,9 @@ class BlinkParams:
     max_gap_s: float = 0.4          # a gap this long (face lost) splits the signal
     refractory_s: float = 0.15
     min_fps_for_completeness: float = 20.0
+    noise_k: float = 5.0            # dips must also exceed this many noise sigmas...
+    noise_window_s: float = 5.0     # ...estimated over this window
+    smooth_min_fps: float = 20.0    # median-of-3 smoothing when frames are this dense
 
 
 class _Baseline:
@@ -103,6 +107,10 @@ class BlinkDetector:
         self._last_t: Optional[float] = None
         self._last_blink_t = -1e9
         self._last_blink_end = -1e9
+        self._pending: Deque[Blink] = deque()          # confirmed, not yet returned
+        self._raw3: Deque[float] = deque(maxlen=3)     # for median-of-3 smoothing
+        self._diffs: Deque[Tuple[float, float]] = deque()  # (t, |d openness|) for noise
+        self._prev_o: Optional[float] = None
         self.openness: Optional[float] = None         # latest value, for UIs/debugging
 
     @property
@@ -114,6 +122,7 @@ class BlinkDetector:
         self._base_l.clear()
         self._sig.clear()
         self._next = 0
+        self._pending.clear()
         self._last_t = None
         self.openness = None
 
@@ -124,17 +133,14 @@ class BlinkDetector:
             if 0 < dt < 1.0:
                 self._fps_dt = dt if self._fps_dt is None else 0.9 * self._fps_dt + 0.1 * dt
             if dt > p.max_gap_s:
-                self._sig.clear()
-                self._next = 0
+                self._break_signal()
         self._last_t = f.t
 
         if not f.face or abs(f.yaw) > p.max_abs_yaw or f.ear_right <= 0 or f.ear_left <= 0:
-            # Unusable frame: flush what we can judge, then break the signal.
+            # Unusable frame: judge what we can, then break the signal.
             self.openness = None
-            out = self._evaluate(final=True)
-            self._sig.clear()
-            self._next = 0
-            return out
+            self._break_signal()
+            return self._pending.popleft() if self._pending else None
 
         self._base_r.push(f.t, f.ear_right)
         self._base_l.push(f.t, f.ear_left)
@@ -142,8 +148,13 @@ class BlinkDetector:
             return None
         o = self._openness(f)
         self.openness = o
+        self._track_noise(f.t, o)
+        if self.fps >= p.smooth_min_fps:
+            self._raw3.append(o)
+            o = sorted(self._raw3)[len(self._raw3) // 2]
         self._sig.append((f.t, o, f.pitch))
-        out = self._evaluate(final=False)
+        self._evaluate(final=False)
+        out = self._pending.popleft() if self._pending else None
         # Trim history we no longer need (keep enough look-back for the next candidates).
         horizon = f.t - (p.before_s + p.after_s + p.max_event_s)
         drop = 0
@@ -153,6 +164,42 @@ class BlinkDetector:
             del self._sig[:drop]
             self._next -= drop
         return out
+
+    def flush(self) -> List[Blink]:
+        """End of stream: judge remaining candidates with whatever look-ahead exists."""
+        self._break_signal()
+        out = list(self._pending)
+        self._pending.clear()
+        return out
+
+    def _break_signal(self) -> None:
+        self._evaluate(final=True)
+        self._sig.clear()
+        self._next = 0
+        self._raw3.clear()
+        self._prev_o = None
+
+    @property
+    def noise(self) -> Optional[float]:
+        """Robust per-frame noise of the openness signal (sigma), or None if unknown.
+
+        Median absolute frame-to-frame change, scaled to a Gaussian sigma. Blinks are a
+        small fraction of frames, so the median ignores them.
+        """
+        if len(self._diffs) < 20:
+            return None
+        return float(np.median([d for _, d in self._diffs])) * 1.4826 / math.sqrt(2)
+
+    def _track_noise(self, t: float, o: float) -> None:
+        if self._prev_o is not None:
+            self._diffs.append((t, abs(o - self._prev_o)))
+            while self._diffs and t - self._diffs[0][0] > self.p.noise_window_s:
+                self._diffs.popleft()
+        self._prev_o = o
+
+    def _min_prominence(self) -> float:
+        n = self.noise
+        return self.p.min_prominence if n is None else max(self.p.min_prominence, self.p.noise_k * n)
 
     def recent_min_openness(self, seconds: float) -> Optional[float]:
         """Lowest openness in the last `seconds` (detects a blink not yet confirmed)."""
@@ -173,13 +220,12 @@ class BlinkDetector:
             return (o_r + o_l) / 2
         return (o_r * wr + o_l * wl) / (wr + wl)
 
-    def _evaluate(self, final: bool) -> Optional[Blink]:
+    def _evaluate(self, final: bool) -> None:
         """Judge every candidate old enough to have its full look-ahead window."""
         p, sig = self.p, self._sig
         if not sig:
-            return None
+            return
         t_now = sig[-1][0]
-        result = None
         while self._next < len(sig):
             tk = sig[self._next][0]
             if not final and t_now - tk < p.after_s:
@@ -187,11 +233,10 @@ class BlinkDetector:
             k = self._next
             self._next += 1
             b = self._judge(k)
-            if b is not None and result is None:
-                result = b
+            if b is not None:
+                self._pending.append(b)
                 self._last_blink_t = b.t
                 self._last_blink_end = b.end
-        return result
 
     def _judge(self, k: int) -> Optional[Blink]:
         p, sig = self.p, self._sig
@@ -209,7 +254,7 @@ class BlinkDetector:
             return None
         ref = min(max(left), max(right))
         prom = ref - ok
-        if prom < p.min_prominence or prom < p.min_rel_prominence * ref:
+        if prom < self._min_prominence() or prom < p.min_rel_prominence * ref:
             return None
         # Width at half prominence ~ how long the lids were down.
         half = ok + prom / 2

@@ -110,3 +110,33 @@ def face_luminance(gray: np.ndarray, pts: np.ndarray) -> Optional[float]:
     if x1 - x0 < 4 or y1 - y0 < 4:
         return None
     return float(gray[y0:y1, x0:x1].mean())
+
+
+# Iris landmarks centre within the eye, mapped to an approximate rotation angle.
+# The visible eye opening is ~30 mm wide and the eyeball radius ~12 mm, so an
+# iris offset of r (as a fraction of the half-width, 15 mm) is ~asin(1.25 r).
+EYE_HALF_WIDTH_MM, EYEBALL_RADIUS_MM = 15.0, 12.0
+
+
+def eye_in_head_yaw(pts: np.ndarray) -> Optional[float]:
+    """Horizontal eye rotation relative to the head, degrees (+ = toward image right).
+
+    Diagnostic only. At typical webcam resolution the iris is ~10 px wide, so one
+    pixel of landmark error is ~6 degrees, and the estimate degrades past ~30 degrees
+    of head yaw. Too coarse to split screens by (reading across one wide monitor
+    sweeps the eyes +/-20 degrees), so screen zones use head yaw instead.
+    """
+    if pts.shape[0] < 478:
+        return None
+    vals = []
+    for (a, b), c in ((RIGHT_EYE_CORNERS, RIGHT_IRIS_CENTER), (LEFT_EYE_CORNERS, LEFT_IRIS_CENTER)):
+        p1, p2, ic = pts[a, :2], pts[b, :2], pts[c, :2]
+        if p1[0] > p2[0]:
+            p1, p2 = p2, p1                    # orient the axis toward image +x
+        axis = p2 - p1
+        half = np.linalg.norm(axis) / 2
+        if half < 1e-3:
+            continue
+        r = float(np.dot(ic - (p1 + p2) / 2, axis / (2 * half)) / half)
+        vals.append(math.degrees(math.asin(float(np.clip(r * EYE_HALF_WIDTH_MM / EYEBALL_RADIUS_MM, -1, 1)))))
+    return float(np.mean(vals)) if vals else None

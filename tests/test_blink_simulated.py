@@ -1,6 +1,6 @@
 from helpers import match, run_detector
 
-from blinkwise.core.simulate import Scenario, Screen
+from blinkwise.core.simulate import Scenario, Screen, Simulation
 from blinkwise.vision.blink import BlinkDetector
 from blinkwise.vision.features import FrameFeatures
 
@@ -51,3 +51,52 @@ def test_extreme_yaw_frames_are_ignored():
                           ear_left=0.3 if i % 7 else 0.02, width_right=20, width_left=20, yaw=70)
         assert det.update(f) is None
     assert det.openness is None
+
+
+def test_noisy_camera_does_not_hallucinate_blinks():
+    """8% per-frame EAR noise (dim room / cheap webcam). Before noise adaptation this
+    produced ~440 false blinks per hour; the detector must back off instead."""
+    sc = Scenario(duration_s=600, incomplete_frac=0.3, ear_noise=0.024, pose_noise_deg=1.5,
+                  keyboard_glances_per_min=2, seed=12)
+    truth, found = run_detector(sc)
+    pairs, fps, misses = match(truth, found)
+    assert len(fps) <= 2
+    assert len(pairs) / len(truth) >= 0.9
+
+
+def test_flush_returns_blinks_at_end_of_stream():
+    sc = Scenario(duration_s=20, blink_rate=1, seed=1)
+    sim = Simulation(sc)
+    frames = list(sim.frames())
+    # Put a blink in the last 0.2 s, where the look-ahead window can't complete.
+    from blinkwise.core.simulate import TruthBlink, _lid_profile
+    t_end = frames[-1].t
+    tb = t_end - 0.2
+    for f in frames:
+        lid = _lid_profile(f.t - tb, 0.1, False)
+        f.ear_right *= lid
+        f.ear_left *= lid
+    det = BlinkDetector()
+    found = [b for f in frames if (b := det.update(f))]
+    assert not any(abs(b.t - tb) < 0.15 for b in found)
+    tail = det.flush()
+    assert any(abs(b.t - tb) < 0.15 for b in tail)
+    assert TruthBlink  # imported for readability of the scenario
+
+
+def test_two_blinks_before_face_loss_are_both_reported():
+    det = BlinkDetector()
+    out = []
+    for i in range(int(4 * 30)):
+        t = i / 30
+        lid = min(_lid(t - 2.5), _lid(t - 3.3))
+        out.append(det.update(FrameFeatures(t=t, face=True, ear_right=.3 * lid, ear_left=.3 * lid,
+                                            width_right=30, width_left=30)))
+    out.append(det.update(FrameFeatures(t=4.0, face=False)))
+    out.append(det.update(FrameFeatures(t=4.1, face=False)))
+    assert len([b for b in out if b is not None]) == 2
+
+
+def _lid(dt):
+    from blinkwise.core.simulate import _lid_profile
+    return _lid_profile(dt, 0.1, False)

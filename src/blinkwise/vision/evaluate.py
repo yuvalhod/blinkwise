@@ -52,6 +52,7 @@ def detect_frames(frames: Sequence[FrameFeatures], fps: float,
         b = det.update(f)
         if b is not None:
             out.append(int(round(b.t * fps)))
+    out += [int(round(b.t * fps)) for b in det.flush()]
     return out
 
 

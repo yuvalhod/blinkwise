@@ -25,3 +25,6 @@ class FrameFeatures:
     distance_cm: Optional[float] = None   # iris-based viewing distance estimate
     luminance: Optional[float] = None     # mean face brightness 0-255
     blink_score: Optional[float] = None   # MediaPipe eyeBlink blendshape mean (diagnostic only)
+    faces: int = 0                        # faces in view (the user is chosen among them)
+    face_px: Optional[float] = None       # face width in pixels (tracking-quality signal)
+    eye_yaw: Optional[float] = None       # eye-in-head horizontal gaze, degrees (diagnostic, coarse)

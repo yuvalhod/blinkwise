@@ -18,10 +18,12 @@ from typing import Callable, Dict, List, Optional
 
 from ..config import Settings
 from ..vision.attention import Zone
+from ..vision.quality import Quality
 from .events import Suggestion
 from .metrics import WindowStats
 
 SEVERITY_RANK = {"info": 0, "warn": 1, "high": 2}
+BLINK_RULES = {"low_blink_rate", "incomplete_blinks", "fatigue", "screen_zone_blink_gap"}
 
 
 @dataclass
@@ -38,6 +40,7 @@ class CoachContext:
     switches_per_min: float
     screen_minutes: float            # total attended minutes this session
     fps: float
+    quality: Quality = field(default_factory=lambda: Quality("unknown"))
 
 
 @dataclass
@@ -65,6 +68,7 @@ class Coach:
             _Rule("screen_zone_blink_gap", 60 * 60, rule_zone_blink_gap),
             _Rule("dim_light", 60 * 60, rule_dim_light),
             _Rule("young_outdoors", 4 * 3600, rule_young_outdoors),
+            _Rule("tracking_quality", 30 * 60, rule_tracking_quality),
         ]
 
     def evaluate(self, ctx: CoachContext) -> List[Suggestion]:
@@ -73,6 +77,8 @@ class Coach:
             last = self._last_fired.get(r.name, -1e9)
             if ctx.now - last < r.cooldown_s:
                 continue
+            if r.name in BLINK_RULES and ctx.quality.level == "poor":
+                continue        # don't give blink advice from unreliable measurements
             s = r.fn(ctx, self.settings)
             if s is None:
                 continue
@@ -244,3 +250,14 @@ def rule_young_outdoors(c: CoachContext, s: Settings) -> Optional[Suggestion]:
         "to slow the onset of short-sightedness. In one trial, an extra 40 minutes outside "
         "each school day cut new myopia cases. Aim for 1-2 hours outdoors a day.",
         refs=["he2015"])
+
+
+def rule_tracking_quality(c: CoachContext, s: Settings) -> Optional[Suggestion]:
+    q = c.quality
+    if q.level != "poor" or c.screen_minutes < 2:
+        return None
+    return Suggestion(
+        "", "warn", "Blinkwise can't see your eyes clearly",
+        f"Tracking is unreliable right now ({'; '.join(q.reasons)}), so blink-based advice is "
+        f"paused rather than risk being wrong. {' '.join(q.tips)}",
+        refs=[], data={"reasons": q.reasons})

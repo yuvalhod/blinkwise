@@ -16,6 +16,7 @@ from ..research import RELAXED_BLINK_RATE
 from ..vision.attention import AttentionTracker, connected_monitors
 from ..vision.blink import Blink, BlinkDetector, BlinkParams
 from ..vision.features import FrameFeatures
+from ..vision.quality import Quality, assess
 from .breaks import BreakScheduler
 from .coach import Coach, CoachContext
 from .events import BlinkEvent, BreakDue, BreakEnded, MinuteSummary, StareCue, Suggestion
@@ -59,7 +60,9 @@ class Engine:
         self._screen_s = 0.0
         self._total_blinks = 0
         self._minute: Optional[_Minute] = None
-        self._recent: Deque[Tuple[float, Optional[float], float, float, Optional[float]]] = deque()
+        # (t, distance_cm, pitch, yaw, luminance, face_px) while attending
+        self._recent: Deque[Tuple[float, Optional[float], float, float, Optional[float],
+                                  Optional[float]]] = deque()
         self.suggestions: Deque[Suggestion] = deque(maxlen=50)
         self.last_features: Optional[FrameFeatures] = None
         self.break_due: Optional[BreakDue] = None
@@ -158,6 +161,8 @@ class Engine:
             "distance_cm": _r(dist, 0),
             "head_pitch": _r(pitch), "head_yaw": _r(f.yaw if f and f.face else None),
             "luminance": _r(lum, 0),
+            "quality": self._quality_dict(),
+            "people_in_view": f.faces if f is not None else 0,
             "screen_minutes": round(self._screen_s / 60, 1),
             "monitors_connected": self.monitors,
             "zones": [dict(index=z.index, yaw=round(z.center_yaw, 1), pitch=round(z.mean_pitch, 1),
@@ -173,6 +178,12 @@ class Engine:
         }
 
     # ------------------------------------------------------------- internals
+    def _quality_dict(self) -> Dict[str, Any]:
+        q = self.quality()
+        noise = self.detector.noise
+        return {"level": q.level, "reasons": q.reasons, "tips": q.tips,
+                "noise": None if noise is None else round(noise, 4)}
+
     def _latest_suggestions(self, limit: int = 8) -> List[Dict[str, Any]]:
         """Most recent suggestion per rule, newest first (no repeats in the UI)."""
         seen, out = set(), []
@@ -203,7 +214,7 @@ class Engine:
 
     def _track_recent(self, t: float, f: FrameFeatures, attending: bool) -> None:
         if attending:
-            self._recent.append((t, f.distance_cm, f.pitch, f.yaw, f.luminance))
+            self._recent.append((t, f.distance_cm, f.pitch, f.yaw, f.luminance, f.face_px))
         while self._recent and t - self._recent[0][0] > 300:
             self._recent.popleft()
 
@@ -213,6 +224,13 @@ class Engine:
             return statistics.median(vals) if len(vals) >= 10 else None
         return med(1, 120), med(2, 300), med(3, 300), med(4, 120)
 
+    def quality(self) -> Quality:
+        t = self._last_t or 0.0
+        vals = [r[5] for r in self._recent if r[5] is not None and t - r[0] <= 60]
+        face_px = statistics.median(vals) if len(vals) >= 10 else None
+        lum = self._medians(t)[3]
+        return assess(self.detector.fps, face_px, lum, self.detector.noise)
+
     def _context(self, t: float) -> CoachContext:
         dist, pitch, _, lum = self._medians(t)
         return CoachContext(
@@ -220,7 +238,7 @@ class Engine:
             s10=self.stats.window(t, 600), distance_cm=dist, pitch=pitch, luminance=lum,
             zones=self.attention.zones, monitors=self.monitors,
             switches_per_min=self.attention.switches_per_min(t),
-            screen_minutes=self._screen_s / 60.0, fps=self.detector.fps)
+            screen_minutes=self._screen_s / 60.0, fps=self.detector.fps, quality=self.quality())
 
     def _roll_minute(self, t: float, dt: float, attending: bool,
                      stare: Optional[float]) -> List[MinuteSummary]:

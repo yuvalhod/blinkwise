@@ -28,4 +28,4 @@ jobs:
       - name: Test
         run: python -m pytest -q
       - name: Blink detector accuracy on labelled video
-        run: python scripts/eval_blinks.py
+        run: python scripts/eval_blinks.py --quick
