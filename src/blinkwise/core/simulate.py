@@ -164,9 +164,26 @@ def _lid_profile(dt: float, depth: float, long: bool, long_hold_s: float = 0.6) 
     return depth + (1.0 - depth) * ((dt - hold) / reopen)
 
 
+def demo_phone_schedule(duration_s: float) -> List[Tuple[float, float]]:
+    """Phone use for the demo: a 3-minute phone session every 40 minutes, and a 10-minute
+    'multitasking' stretch every 25 minutes (30 s phone glances every 90 s)."""
+    out: List[Tuple[float, float]] = []
+    t = 15 * 60.0
+    while t < duration_s:
+        out += [(t + k * 90.0, t + k * 90.0 + 30.0) for k in range(7)]
+        t += 25 * 60
+    t = 30 * 60.0
+    while t < duration_s:
+        out.append((t, t + 180.0))
+        t += 40 * 60
+    return sorted(out)
+
+
 def demo_scenario(seed: Optional[int] = None) -> Scenario:
-    """A plausible two-monitor knowledge worker who forgets to blink."""
-    return Scenario(duration_s=3600 * 8, fps=24, blink_rate=7.0, incomplete_frac=0.35,
+    """A plausible two-monitor knowledge worker who forgets to blink and checks their phone."""
+    dur = 3600 * 8
+    return Scenario(duration_s=dur, fps=24, blink_rate=7.0, incomplete_frac=0.35,
                     long_frac=0.02, screens=(Screen(-4, -5, 0.65), Screen(31, -3, 0.35)),
                     keyboard_glances_per_min=1.0, distance_cm=46,
+                    phone=demo_phone_schedule(dur), phone_blink_factor=0.7,
                     seed=seed if seed is not None else random.randrange(1 << 30))

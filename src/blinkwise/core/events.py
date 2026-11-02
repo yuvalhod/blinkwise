@@ -58,12 +58,9 @@ class MinuteSummary:
     long: int
     max_stare_s: float
     distance_cm: Optional[float]
-    pitch: Optional[float]
-    yaw: Optional[float]
-    luminance: Optional[float]
     zones: int
-    switches_per_min: float
     session_min: float = 0.0        # continuous screen minutes when this minute began
+    screen_s: float = 0.0           # eyes on the computer screen(s)
     down_s: float = 0.0             # looking down at a phone/tablet/paper
     obs_down_s: float = 0.0
     blinks_down: int = 0

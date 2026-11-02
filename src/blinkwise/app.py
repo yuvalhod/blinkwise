@@ -46,6 +46,7 @@ class App:
         self.engine = Engine(settings, monitors=monitors)
         hist = history_path or (data_dir() / ("demo.sqlite" if demo else "history.sqlite"))
         self.history = History(hist) if (settings.store_history or demo) else None
+        self._purge_at = 0.0
         self.events: "queue.Queue[Any]" = queue.Queue()
         self.commands: "queue.Queue[str]" = queue.Queue()
         self.stop = threading.Event()
@@ -227,6 +228,16 @@ class App:
                     b.since_micro = b.micro_interval(False)  # due on the next tick
                     b.snoozed_until = -1e9
 
+    def _housekeeping(self) -> None:
+        """Hourly: delete history older than the retention period."""
+        if self.history is None or self.demo or time.monotonic() < self._purge_at:
+            return
+        self._purge_at = time.monotonic() + 3600
+        try:
+            self.history.purge(self.s.history_days)
+        except Exception:
+            log.exception("history purge failed")
+
     def _check_daily_summary(self) -> None:
         """Called about once a minute from the UI loop."""
         if self.history is None or self.demo or time.monotonic() - self._summary_check < 60:
@@ -341,6 +352,10 @@ class App:
             self.resume()
         elif action == "break_now":
             self.commands.put("break_now")
+        elif action == "wipe":
+            if self.history is not None:
+                self.history.wipe()
+            self._today, self._today_at = {}, 0.0
         elif action == "skip_break":
             self.events.put(("close_break", None))
             self.commands.put("skipped")
@@ -380,6 +395,7 @@ class App:
                     break
                 self._handle_ui_event(ev, cue, card, toast)
             self._check_daily_summary()
+            self._housekeeping()
             root.after(50, pump)
 
         root.after(50, pump)
@@ -452,6 +468,7 @@ class App:
             print("Blinkwise is running (no on-screen overlay). Press Ctrl+C to quit.")
         while not self.stop.is_set():
             self._check_daily_summary()
+            self._housekeeping()
             try:
                 ev = self.events.get(timeout=0.5)
             except queue.Empty:

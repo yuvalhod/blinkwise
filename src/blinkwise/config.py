@@ -59,6 +59,7 @@ EDITABLE = {
     "daily_summary": None,      # "HH:MM" or ""
     "profile": ["adult", "young"],
     "store_history": [True, False],
+    "history_days": [7, 30, 90, 365],
     "setup_done": [True, False],
 }
 
@@ -102,6 +103,7 @@ class Settings:
     dashboard_port: int = 8765
     tray: bool = True                     # menu-bar / system-tray icon
     store_history: bool = True
+    history_days: int = 90                # history older than this is deleted automatically
 
     @classmethod
     def path(cls) -> Path:
@@ -148,6 +150,8 @@ class Settings:
                 v = v if isinstance(v, bool) else str(v).lower() in ("1", "true", "yes", "on")
             elif isinstance(cur, float):
                 v = float(v)
+            elif isinstance(cur, int):
+                v = int(v)
             if rule is None:                      # daily_summary
                 v = str(v).strip()
                 if v and not _valid_hhmm(v):

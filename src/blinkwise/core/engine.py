@@ -41,6 +41,7 @@ class _Minute:
     long: int = 0
     max_stare: float = 0.0
     session_min: float = 0.0     # continuous screen minutes at the start of this minute
+    screen_s: float = 0.0        # eyes on the computer screen(s)
     down_s: float = 0.0          # looking well below the screen (phone, tablet, paper)
     obs_down_s: float = 0.0      # ...with the eyes measurable
     blinks_down: int = 0
@@ -221,6 +222,8 @@ class Engine:
             "luminance": _r(lum, 0),
             "quality": self._quality_dict(),
             "people_in_view": f.faces if f is not None else 0,
+            "activity": ("device" if self._down_now else "screen")
+            if (f is not None and self.attention.attending(f.face, f.yaw)) else "away",
             "head_pitch_now": _r(f.pitch if f and f.face else None),
             "face_px": _r(f.face_px if f and f.face else None, 0),
             "eyes_hidden": bool(self.detector.eyes_hidden),
@@ -342,6 +345,8 @@ class Engine:
         down = self._down_since is not None and t - self._down_since >= 1.0
         m = self._minute
         if m is not None:
+            if attending and not down:
+                m.screen_s += dt
             if down:
                 m.down_s += dt
                 if self.detector.openness is not None:
@@ -367,16 +372,14 @@ class Engine:
                 m.max_stare = max(m.max_stare, stare)
         if t - m.start < 60.0:
             return []
-        dist, pitch, yaw, lum = self._medians(t)
+        dist = self._medians(t)[0]
         summary = MinuteSummary(
             t=m.start, observed_s=round(m.observed, 1), blinks=m.blinks, judged=m.judged,
             incomplete=m.incomplete, long=m.long, max_stare_s=round(m.max_stare, 1),
-            distance_cm=dist, pitch=pitch, yaw=yaw, luminance=lum,
-            zones=len(self.attention.zones),
-            switches_per_min=round(self.attention.switches_per_min(t), 2),
-            session_min=round(m.session_min, 1), down_s=round(m.down_s, 1),
-            obs_down_s=round(m.obs_down_s, 1), blinks_down=m.blinks_down,
-            device_switches=m.device_switches, stares20=m.stares20)
+            distance_cm=dist, zones=len(self.attention.zones),
+            session_min=round(m.session_min, 1), screen_s=round(m.screen_s, 1),
+            down_s=round(m.down_s, 1), obs_down_s=round(m.obs_down_s, 1),
+            blinks_down=m.blinks_down, device_switches=m.device_switches, stares20=m.stares20)
         self._minute = _Minute(start=t, session_min=self._continuous_s / 60)
         return [summary]
 

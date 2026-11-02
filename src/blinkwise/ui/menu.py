@@ -99,9 +99,11 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
             items.append(Item.line(f"Next eye break: in {duration(snap['next_break_s'])}"))
     today = snap.get("today") or {}
     if today.get("screen_minutes"):
-        brk = today.get("breaks_taken", 0)
-        items.append(Item.line(f"Today: {duration(today['screen_minutes'] * 60)} on screen, "
-                               f"{brk} break{'s' if brk != 1 else ''}"))
+        items.append(Item.line(f"Screen time today: {duration(today['screen_minutes'] * 60)}"))
+        if today.get("device_minutes", 0) >= 1:
+            items.append(Item.line(f"Phone / other device: {duration(today['device_minutes'] * 60)}"
+                                   + (f", {today['multitask_minutes']} min both at once"
+                                      if today.get("multitask_minutes") else "")))
     items.append(Item.sep())
 
     if snap.get("break_active"):

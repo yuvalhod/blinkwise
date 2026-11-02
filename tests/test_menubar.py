@@ -41,7 +41,8 @@ def test_closed_eye_has_lashes_below_the_lid():
 SNAP = dict(running=True, face=True, paused=False, preset="balanced", blink_rate_5m=8.4,
             seconds_since_blink=4.2,
             next_break_s=725, break_active=None, quality={"level": "good"},
-            today={"screen_minutes": 200.0, "breaks_taken": 4})
+            today={"screen_minutes": 200.0, "device_minutes": 35.0, "multitask_minutes": 22,
+                   "breaks_taken": 4})
 
 
 def test_menu_reads_in_plain_words():
@@ -50,7 +51,8 @@ def test_menu_reads_in_plain_words():
     assert "Blinking: 8 a minute, low" in text
     assert "Last blink: 4 s ago" in text
     assert "Next eye break: in 12 min" in text
-    assert "Today: 3 h 20 min on screen, 4 breaks" in text
+    assert "Screen time today: 3 h 20 min" in text
+    assert "Phone / other device: 35 min, 22 min both at once" in text
     assert "Take a 20-second eye break" in text and "Pause camera >" in text
     assert "Quiet for 1 hour (keep measuring)" in text
     assert "  (x) Balanced" in text and "  ( ) Coach - big prompts, full-screen breaks" in text

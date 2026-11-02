@@ -89,7 +89,7 @@ def cmd_run(args) -> int:
     if args.camera is not None:
         s.camera = args.camera
     if getattr(args, "app", False):
-        logging.getLogger().setLevel(logging.INFO)     # the launcher sends output to a log file
+        logging.getLogger().setLevel(logging.WARNING)  # app log: problems only, no activity
     else:
         _first_run_notice()
     App(s, ui=not args.no_ui, dashboard=not args.no_dashboard, open_browser=args.open,

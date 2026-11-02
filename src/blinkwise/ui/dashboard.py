@@ -21,7 +21,7 @@ from ..research import REFERENCES
 
 log = logging.getLogger(__name__)
 
-ALLOWED_ACTIONS = {"pause", "resume", "break_now", "skip_break"}
+ALLOWED_ACTIONS = {"pause", "resume", "break_now", "skip_break", "wipe"}
 
 
 def _static(name: str) -> str:
@@ -137,6 +137,18 @@ class DashboardServer:
                         return self._json({"hours_of_data": 0, "insights": []})
                     from ..core.analytics import report
                     return self._json(report(server.history.minute_rows(days)))
+                if u.path == "/api/export":
+                    data = server.history.export() if server.history is not None else {}
+                    body = json.dumps(data, indent=1).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Disposition",
+                                     'attachment; filename="blinkwise-data.json"')
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
                 if u.path == "/api/science":
                     return self._json([dataclasses.asdict(r) for r in REFERENCES.values()])
                 if u.path == "/api/settings":
