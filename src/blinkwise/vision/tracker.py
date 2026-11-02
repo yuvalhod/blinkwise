@@ -62,7 +62,7 @@ class FaceTracker:
 
     def __init__(self, model_path: Path, horizontal_fov_deg: float = 60.0,
                  focal_px_override: Optional[float] = None, max_faces: int = 3,
-                 low_light: bool = True):
+                 low_light: bool = True, zoom: bool = True):
         os.environ.setdefault("GLOG_minloglevel", "2")      # silence MediaPipe's C++ logging
         os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
         import mediapipe as mp  # imported lazily so the engine is usable without it
@@ -85,6 +85,7 @@ class FaceTracker:
         self._last_ts_ms = -1
         self.last_iris_px: Optional[float] = None
         self.lock = UserLock()
+        self.zoom = FaceZoom(enabled=zoom)
         self.low_light = low_light
 
     def process(self, frame_bgr: np.ndarray, t: float) -> FrameFeatures:
@@ -99,12 +100,23 @@ class FaceTracker:
         raw_gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         if self.low_light and is_dark(frame_bgr):
             frame_bgr = enhance_low_light(frame_bgr)
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
+        # Digital zoom: when the face is small, feed MediaPipe a crop around it (its face
+        # detector downsizes the whole frame, so small faces otherwise vanish).
+        roi = self.zoom.window
+        if roi is not None:
+            x0, y0, x1, y1 = roi
+            feed = frame_bgr[y0:y1, x0:x1]
+        else:
+            x0, y0, x1, y1 = 0, 0, w, h
+            feed = frame_bgr
+        rgb = cv2.cvtColor(feed, cv2.COLOR_BGR2RGB)
+        image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
         res = self._landmarker.detect_for_video(image, ts_ms)
-        faces = [np.array([[p.x * w, p.y * h, p.z * w] for p in fl], dtype=np.float32)
+        cw, ch = x1 - x0, y1 - y0
+        faces = [np.array([[x0 + p.x * cw, y0 + p.y * ch, p.z * cw] for p in fl], dtype=np.float32)
                  for fl in res.face_landmarks]
         idx = self.lock.select([_box(f) for f in faces], t, w)
+        self.zoom.update(_box(faces[idx]) if idx is not None else None, w, h)
         if idx is None:
             self.last_iris_px = None
             return FrameFeatures(t=t, face=False, faces=len(faces))
@@ -191,3 +203,68 @@ class UserLock:
             idx = max(range(len(boxes)), key=score)
         self.last_center, self.last_width, self.last_seen = centers[idx], widths[idx], t
         return idx
+
+
+class FaceZoom:
+    """A smoothed crop window that follows a small face.
+
+    Measured on real video: with the face at 60% of its normal size (~69 px wide)
+    MediaPipe found it in 70% of frames, at 40% (~46 px) in none. Cropping around
+    the face makes it large again in the image MediaPipe sees.
+    """
+
+    def __init__(self, enabled: bool = True, below_px: float = 150.0, factor: float = 4.0,
+                 min_crop: float = 240.0, misses_to_reset: int = 3, smooth: float = 0.35):
+        self.enabled = enabled
+        self.below_px = below_px      # zoom when the face is narrower than this
+        self.factor = factor          # crop width = factor x face width
+        self.min_crop = min_crop
+        self.misses_to_reset = misses_to_reset
+        self.smooth = smooth
+        self.window = None            # (x0, y0, x1, y1) ints, or None = full frame
+        self._f = None                # float window for smoothing
+        self._misses = 0
+        self.searching = False
+        self._scan = 0
+
+    # Half-size tiles (50% overlap) tried when nothing is found in the full frame,
+    # so a face too small to be detected at full size can still be acquired.
+    _TILES = [(0.25, 0.25), (0.0, 0.0), (0.5, 0.0), (0.0, 0.5), (0.5, 0.5),
+              (0.25, 0.0), (0.25, 0.5), (0.0, 0.25), (0.5, 0.25)]
+
+    def update(self, box, w: int, h: int) -> None:
+        if not self.enabled:
+            return
+        if box is None:
+            self._misses += 1
+            if self._misses >= self.misses_to_reset:
+                self._f = None
+                # Alternate: full frame, tile, full frame, next tile, ...
+                if self.window is None and self._misses >= 2 * self.misses_to_reset:
+                    fx, fy = self._TILES[self._scan % len(self._TILES)]
+                    self._scan += 1
+                    self.window = (int(fx * w), int(fy * h), int(fx * w + w / 2), int(fy * h + h / 2))
+                    self.searching = True
+                else:
+                    self.window = None
+            return
+        self._misses = 0
+        self.searching = False
+        fw = box[2] - box[0]
+        if fw >= self.below_px:
+            self.window, self._f = None, None
+            return
+        cw = min(float(w), max(self.min_crop, self.factor * fw))
+        chh = min(float(h), cw * h / w)
+        cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+        target = [cx - cw / 2, cy - chh / 2, cx + cw / 2, cy + chh / 2]
+        if self._f is None:
+            self._f = target
+        else:
+            self._f = [a + self.smooth * (b - a) for a, b in zip(self._f, target, strict=True)]
+        x0, y0, x1, y1 = self._f
+        # Keep the window inside the frame without changing its size.
+        dx = max(0.0, -x0) - max(0.0, x1 - w)
+        dy = max(0.0, -y0) - max(0.0, y1 - h)
+        x0, x1, y0, y1 = x0 + dx, x1 + dx, y0 + dy, y1 + dy
+        self.window = (int(max(0, x0)), int(max(0, y0)), int(min(w, x1)), int(min(h, y1)))

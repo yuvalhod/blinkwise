@@ -124,7 +124,7 @@ Robustness on real pixels (held-out video, degraded on purpose):
 | Low-resolution camera (0.4x) | 1.00 | 0.96 | fair |
 | Dim room + sensor noise | 0.93 | 0.48 | **poor** (blink advice paused) |
 
-In a very dark room, blinks get missed. Blinkwise doesn't invent any; it says it can't see well and asks for more light. Real-video tests use Intel's public [sample videos](https://github.com/intel-iot-devkit/sample-videos). More labelled real-world data is the most valuable contribution you can make (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+Full matrix of conditions, head angles and what the app does in each: [docs/LIMITS.md](docs/LIMITS.md). In a very dark room, blinks get missed. Blinkwise doesn't invent any; it says it can't see well and asks for more light. Real-video tests use Intel's public [sample videos](https://github.com/intel-iot-devkit/sample-videos). More labelled real-world data is the most valuable contribution you can make (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 Performance: about 80 fps of processing on a laptop CPU. At the default 24 fps cap that's well under half a core, and it drops to 2 fps when nobody is in front of the camera.
 

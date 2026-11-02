@@ -10,16 +10,17 @@ from blinkwise.vision.tracker import UserLock
 
 def test_quality_grades():
     assert assess(30, 150, 120, 0.01).level == "good"
-    q = assess(15, 100, 50, 0.02)
+    q = assess(15, 80, 50, 0.02)
     assert q.level == "fair" and len(q.reasons) == 3 and q.tips
-    assert assess(30, 50, 120, 0.01).level == "poor"
+    assert assess(30, 40, 120, 0.01).level == "poor"
+    assert assess(30, 60, 120, 0.01).level == "fair"         # zoom keeps 60 px faces usable
     assert assess(30, 150, 20, 0.01).level == "poor"
     assert assess(30, 150, 120, 0.09).level == "poor"
     assert assess(30, None, 120, 0.01).level == "unknown"
 
 
 def test_poor_tracking_suppresses_blink_advice_and_explains_why():
-    poor = assess(30, 50, 25, 0.02)
+    poor = assess(30, 40, 25, 0.02)
     fired = {s.rule: s for s in Coach(Settings()).evaluate(ctx(s5=ws(rate=3), quality=poor))}
     assert "low_blink_rate" not in fired
     assert "tracking_quality" in fired and "light" in fired["tracking_quality"].message
@@ -64,3 +65,28 @@ def test_eye_in_head_yaw_geometry():
     assert 25 < right < 35                      # asin(0.5) = 30 degrees
     assert geo.eye_in_head_yaw(_eye_pts(-0.4)) == -right
     assert geo.eye_in_head_yaw(np.zeros((468, 3))) is None
+
+
+def test_face_zoom_follows_small_faces_and_searches_when_lost():
+    from blinkwise.vision.tracker import FaceZoom
+    z = FaceZoom()
+    z.update((600, 300, 660, 360), 1280, 720)          # 60 px face -> zoom in around it
+    x0, y0, x1, y1 = z.window
+    assert x0 <= 600 and x1 >= 660 and y0 <= 300 and y1 >= 360
+    assert abs((x1 - x0) / (y1 - y0) - 1280 / 720) < 0.05  # keeps the frame's aspect ratio
+    z.update((500, 200, 800, 500), 1280, 720)          # big face -> full frame
+    assert z.window is None
+    for _ in range(3):
+        z.update(None, 1280, 720)                       # lost: full frame first...
+    assert z.window is None
+    seen = set()
+    for _ in range(20):
+        z.update(None, 1280, 720)
+        if z.window:
+            seen.add(z.window)
+    assert len(seen) >= 5 and z.searching                # ...then sweeps zoomed tiles
+    z.update((100, 100, 140, 140), 1280, 720)            # found in a tile -> zoom on it
+    assert z.window is not None and not z.searching
+    off = FaceZoom(enabled=False)
+    off.update((600, 300, 660, 360), 1280, 720)
+    assert off.window is None

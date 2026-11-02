@@ -41,24 +41,27 @@ def assess(fps: float, face_px: Optional[float], luminance: Optional[float],
         return Quality("unknown")
     level, reasons, tips = GOOD, [], []
 
+    found: List[tuple] = []
+
     def worse(new: str, reason: str, tip: str) -> None:
         nonlocal level
         if _RANK[new] > _RANK[level]:
             level = new
-        reasons.append(reason)
-        if tip not in tips:
-            tips.append(tip)
+        found.append((_RANK[new], reason, tip))
 
-    if fps < 10:
+    # Measured on real video subsampled to 6 fps: 93% of blinks still found, so only
+    # very low rates are "poor".
+    if fps < 5:
         worse(POOR, f"low frame rate ({fps:.0f} fps)", "Close other apps using the camera, or add light "
               "(many webcams lower their frame rate in dim rooms).")
     elif fps < 18:
         worse(FAIR, f"frame rate {fps:.0f} fps (blink completeness needs 20+)", "Add light: webcams "
               "often drop to 15 fps in dim rooms.")
-    if face_px < 70:
+    # With the face-following zoom, a 68 px face still gave 96% recall on real video.
+    if face_px < 45:
         worse(POOR, f"face is small in the image ({face_px:.0f} px wide)", "Sit closer to the camera "
               "or use a higher camera resolution.")
-    elif face_px < 110:
+    elif face_px < 90:
         worse(FAIR, f"face is fairly small ({face_px:.0f} px wide)", "Sitting a little closer to the "
               "camera improves accuracy.")
     if luminance is not None:
@@ -81,4 +84,9 @@ def assess(fps: float, face_px: Optional[float], luminance: Optional[float],
             worse(POOR, "eye tracking is very jittery", "Add light and keep the camera steady.")
         elif noise > 0.035:
             worse(FAIR, "eye tracking is somewhat jittery", "More light usually reduces jitter.")
+    # Worst problems first, so UIs that show one reason show the one that matters.
+    for _, reason, tip in sorted(found, key=lambda x: -x[0]):
+        reasons.append(reason)
+        if tip not in tips:
+            tips.append(tip)
     return Quality(level, reasons, tips)

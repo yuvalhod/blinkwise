@@ -16,7 +16,7 @@ class FrameSource:
     so analysis of a recording is deterministic and independent of CPU speed.
     """
 
-    def __init__(self, source: Union[int, str] = 0, width: int = 640, height: int = 480,
+    def __init__(self, source: Union[int, str] = 0, width: int = 1280, height: int = 720,
                  max_fps: Optional[float] = None, realtime: bool = False):
         os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")   # our own error message is clearer
         import cv2
