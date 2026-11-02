@@ -140,3 +140,47 @@ def eye_in_head_yaw(pts: np.ndarray) -> Optional[float]:
         r = float(np.dot(ic - (p1 + p2) / 2, axis / (2 * half)) / half)
         vals.append(math.degrees(math.asin(float(np.clip(r * EYE_HALF_WIDTH_MM / EYEBALL_RADIUS_MM, -1, 1)))))
     return float(np.mean(vals)) if vals else None
+
+
+_RIGHT_EYE_ALL = (33, 133, 159, 145, 160, 144, 158, 153)
+_LEFT_EYE_ALL = (263, 362, 386, 374, 385, 380, 387, 373)
+_RIGHT_IRIS_RING = (469, 470, 471, 472)
+_LEFT_IRIS_RING = (474, 475, 476, 477)
+
+
+def eye_visibility(gray: np.ndarray, pts: np.ndarray) -> Tuple[Optional[float], Optional[float]]:
+    """Per-eye (right, left) iris contrast: how much darker the iris is than the rest
+    of the eye opening, relative to face brightness.
+
+    MediaPipe *guesses* eyelid landmarks even when the eyes are hidden, so we check
+    the pixels. Measured on real video: visible eyes ~0.07 (10th pct 0.05),
+    sunglasses ~0.00, glare on glasses negative. A blink also hides the iris
+    briefly, so callers smooth this over ~1.5 s before using it.
+    """
+    if pts.shape[0] < 478:
+        return None, None
+    h, w = gray.shape[:2]
+    fx0, fy0 = np.clip(pts[:, :2].min(0), 0, [w - 1, h - 1]).astype(int)
+    fx1, fy1 = np.clip(pts[:, :2].max(0), 0, [w - 1, h - 1]).astype(int)
+    if fx1 - fx0 < 8 or fy1 - fy0 < 8:
+        return None, None
+    ref = float(np.median(gray[fy0:fy1, fx0:fx1])) + 1.0
+    out = []
+    for eye, center, ring in ((_RIGHT_EYE_ALL, RIGHT_IRIS_CENTER, _RIGHT_IRIS_RING),
+                              (_LEFT_EYE_ALL, LEFT_IRIS_CENTER, _LEFT_IRIS_RING)):
+        e = pts[list(eye), :2]
+        x0, y0 = np.clip(e.min(0), 0, [w - 1, h - 1]).astype(int)
+        x1, y1 = np.clip(e.max(0), 0, [w - 1, h - 1]).astype(int)
+        if x1 - x0 < 4 or y1 - y0 < 2:
+            out.append(None)
+            continue
+        roi = gray[y0:y1 + 1, x0:x1 + 1].astype(np.float32)
+        c = pts[center, :2]
+        r = max(1.5, float(np.ptp(pts[list(ring), 0])) / 2)
+        yy, xx = np.mgrid[y0:y1 + 1, x0:x1 + 1]
+        inside = (xx - c[0]) ** 2 + (yy - c[1]) ** 2 <= r * r
+        if inside.sum() < 2 or (~inside).sum() < 2:
+            out.append(0.0)
+            continue
+        out.append(float((roi[~inside].mean() - roi[inside].mean()) / ref))
+    return out[0], out[1]

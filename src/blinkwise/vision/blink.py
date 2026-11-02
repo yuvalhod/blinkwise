@@ -72,6 +72,11 @@ class BlinkParams:
     noise_k: float = 5.0            # dips must also exceed this many noise sigmas...
     noise_window_s: float = 5.0     # ...estimated over this window
     smooth_min_fps: float = 20.0    # median-of-3 smoothing when frames are this dense
+    vis_window_s: float = 1.5       # eye visibility is a rolling median (a blink hides the iris briefly)
+    vis_hidden: float = 0.02        # iris contrast below this = eye hidden (sunglasses, glare)
+    vis_full: float = 0.04          # ...at or above this the eye gets full weight
+    closed_ear_ratio: float = 0.45  # EAR this far below the open level = lids closed, not hidden
+    hidden_min_s: float = 1.0       # both eyes must stay hidden this long to pause detection
 
 
 class _Baseline:
@@ -111,6 +116,14 @@ class BlinkDetector:
         self._raw3: Deque[float] = deque(maxlen=3)     # for median-of-3 smoothing
         self._diffs: Deque[Tuple[float, float]] = deque()  # (t, |d openness|) for noise
         self._prev_o: Optional[float] = None
+        self._vis_r: Deque[Tuple[float, float]] = deque()
+        self._vis_l: Deque[Tuple[float, float]] = deque()
+        self._open_ref: Optional[float] = None         # slow open-eye EAR reference
+        self._ref_t: Optional[float] = None
+        self._hidden_since: Optional[float] = None
+        self.eyes_hidden = False                        # both eyes covered (not just closed)
+        self.vis_right: Optional[float] = None
+        self.vis_left: Optional[float] = None
         self.openness: Optional[float] = None         # latest value, for UIs/debugging
 
     @property
@@ -138,6 +151,12 @@ class BlinkDetector:
 
         if not f.face or abs(f.yaw) > p.max_abs_yaw or f.ear_right <= 0 or f.ear_left <= 0:
             # Unusable frame: judge what we can, then break the signal.
+            self.openness = None
+            self._break_signal()
+            return self._pending.popleft() if self._pending else None
+
+        if self._update_visibility(f):
+            # Both eyes hidden (sunglasses, glare): the landmarks are guesses. Pause.
             self.openness = None
             self._break_signal()
             return self._pending.popleft() if self._pending else None
@@ -209,13 +228,41 @@ class BlinkDetector:
         return min(o for t, o, _ in self._sig if t_now - t <= seconds)
 
     # -- internals ------------------------------------------------------------
+    def _update_visibility(self, f: FrameFeatures) -> bool:
+        """Track per-eye visibility; return True if both eyes are hidden (pause detection)."""
+        p = self.p
+        self.vis_right = _rolling_median(self._vis_r, f.t, f.vis_right, p.vis_window_s)
+        self.vis_left = _rolling_median(self._vis_l, f.t, f.vis_left, p.vis_window_s)
+        ear = (f.ear_right + f.ear_left) / 2
+        # Slow reference for "open": decays ~0.5%/s so it can follow pose/lighting changes.
+        if self._open_ref is None:
+            self._open_ref = ear
+        else:
+            decay = 0.995 ** max(0.0, f.t - (self._ref_t or f.t))
+            self._open_ref = max(ear, self._open_ref * decay)
+        self._ref_t = f.t
+        closed = ear < p.closed_ear_ratio * self._open_ref
+        hidden_now = (self.vis_right is not None and self.vis_left is not None and not closed
+                      and self.vis_right < p.vis_hidden and self.vis_left < p.vis_hidden)
+        if not hidden_now:
+            self._hidden_since = None
+        elif self._hidden_since is None:
+            self._hidden_since = f.t
+        self.eyes_hidden = (self._hidden_since is not None
+                            and f.t - self._hidden_since >= p.hidden_min_s)
+        return self.eyes_hidden
+
     def _openness(self, f: FrameFeatures) -> float:
         br, bl = self._base_r.value(), self._base_l.value()
         o_r = f.ear_right / br if br > 1e-6 else 1.0
         o_l = f.ear_left / bl if bl > 1e-6 else 1.0
         # Weight each eye by how squarely it faces the camera (apparent width^2):
         # with a turned head the far eye is foreshortened and its landmarks noisier.
+        # And by how visible it is: a covered eye's landmarks are guesses.
         wr, wl = f.width_right ** 2, f.width_left ** 2
+        if self.vis_right is not None and self.vis_left is not None:
+            wr *= min(1.0, max(0.05, self.vis_right / self.p.vis_full))
+            wl *= min(1.0, max(0.05, self.vis_left / self.p.vis_full))
         if wr + wl <= 0:
             return (o_r + o_l) / 2
         return (o_r * wr + o_l * wl) / (wr + wl)
@@ -283,3 +330,15 @@ class BlinkDetector:
             complete = closure >= p.complete_closure
         return Blink(t=tk, start=start, end=end, duration=duration, closure=closure,
                      complete=complete, long=duration > p.max_blink_s)
+
+
+def _rolling_median(buf: Deque[Tuple[float, float]], t: float, v: Optional[float],
+                    window: float) -> Optional[float]:
+    if v is not None:
+        buf.append((t, v))
+    while buf and t - buf[0][0] > window:
+        buf.popleft()
+    if not buf:
+        return None
+    vals = sorted(x for _, x in buf)
+    return vals[len(vals) // 2]

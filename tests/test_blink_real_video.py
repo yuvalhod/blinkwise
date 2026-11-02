@@ -42,3 +42,33 @@ def test_looking_down_is_not_a_blink():
     fps, frames = load_features(DATA / "intel_head_pose_features.json")
     found = [f for f in detect_frames(frames, fps) if 665 <= f <= 745]
     assert found == []
+
+
+def test_hidden_eyes_never_become_phantom_blinks():
+    """Real video with synthetic sunglasses: MediaPipe still finds the face and *guesses*
+    eyelids. Before the pixel-level visibility check this produced 11 'blinks', mostly fake.
+    Now detection pauses, and the engine reports poor tracking instead of a wrong blink rate."""
+    from blinkwise.config import Settings
+    from blinkwise.core.engine import Engine
+    from blinkwise.vision.blink import BlinkDetector
+
+    fps, frames = load_features(DATA / "intel_head_pose_male_sunglasses_features.json")
+    assert sum(f.face for f in frames) / len(frames) > 0.85        # face IS found
+    det = BlinkDetector()
+    hidden = 0
+    blinks = []
+    for f in frames:
+        b = det.update(f)
+        hidden += det.eyes_hidden
+        if b:
+            blinks.append(b)
+    blinks += det.flush()
+    assert len(blinks) <= 2
+    assert hidden / len(frames) > 0.6
+
+    eng = Engine(Settings(), monitors=1)
+    for f in frames:
+        eng.step(f)
+    snap = eng.snapshot()
+    assert snap["quality"]["level"] == "poor"
+    assert any("can't see your eyes" in r for r in snap["quality"]["reasons"])

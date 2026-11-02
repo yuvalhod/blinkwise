@@ -122,7 +122,7 @@ class Simulation:
                 yaw=yaw_n, pitch=pitch_s + rng.gauss(0, sc.pose_noise_deg), roll=0.0,
                 distance_cm=sc.distance_cm + rng.gauss(0, 1.5),
                 luminance=sc.luminance + rng.gauss(0, 2.0),
-                faces=1,
+                faces=1, vis_right=0.07, vis_left=0.07,
                 face_px=15.0 * 554.0 / sc.distance_cm,   # 15 cm face, 640 px / 60 deg camera
             )
 

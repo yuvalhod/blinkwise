@@ -122,6 +122,7 @@ class FaceTracker:
             bs = {c.category_name: c.score for c in res.face_blendshapes[idx]}
             blink_score = (bs.get("eyeBlinkLeft", 0.0) + bs.get("eyeBlinkRight", 0.0)) / 2
         gray = raw_gray      # report the *real* lighting, not the enhanced image
+        vis_r, vis_l = geo.eye_visibility(gray, pts)
         x0, y0, x1, y1 = _box(pts)
         return FrameFeatures(
             t=t, face=True, ear_right=er, ear_left=el, width_right=wr, width_left=wl,
@@ -132,6 +133,7 @@ class FaceTracker:
             faces=len(faces),
             face_px=float(x1 - x0),
             eye_yaw=geo.eye_in_head_yaw(pts),
+            vis_right=vis_r, vis_left=vis_l,
         )
 
     def close(self) -> None:

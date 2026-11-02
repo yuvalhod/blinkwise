@@ -58,6 +58,7 @@ class Engine:
         self._last_blink_t: Optional[float] = None
         self._last_cue_t = -1e9
         self._closed_run = 0.0
+        self._hidden: Deque[Tuple[float, bool]] = deque()    # eyes-hidden flags, last 60 s
         self._p80_run = 0.0          # current >=80%-closed run (pending until the eyes reopen)
         self._last_coach_t = -1e9
         self._screen_s = 0.0
@@ -82,22 +83,32 @@ class Engine:
 
         attending = self.attention.attending(f.face, f.yaw)
         blink = self.detector.update(f)
+        # Blink statistics only accrue while the eye signal is usable (not during warm-up,
+        # steep head turns or hidden eyes), otherwise unseen blinks would deflate the rate.
+        eyes_usable = self.detector.openness is not None
         if attending:
-            self.stats.add_observed(t, dt)
             self._screen_s += dt
+            if eyes_usable:
+                self.stats.add_observed(t, dt)
+        if f.face:
+            self._hidden.append((t, self.detector.eyes_hidden))
+        while self._hidden and t - self._hidden[0][0] > 60:
+            self._hidden.popleft()
         self.attention.update(t, dt, f.face, f.yaw, f.pitch)
         if blink is not None:
             out.extend(self._on_blink(blink))
 
         # Stare timer: time since the last blink while the eyes are continuously visible.
-        if f.face:
-            if self._last_seen is None or t - self._last_seen > AWAY_RESET_S:
-                self._last_blink_t = t
+        # After any gap in usable eye data (away, turned, eyes hidden) we can't know when you
+        # last blinked, so restart the timer rather than nag about an unseen stare.
+        if f.face and (self._last_seen is None or t - self._last_seen > AWAY_RESET_S):
+            self._last_blink_t = t
+        if f.face and eyes_usable:
             self._last_seen = t
         stare = self.seconds_since_blink
         pending = self.detector.recent_min_openness(self.detector.p.after_s + 0.1)
         unconfirmed_dip = pending is not None and pending < 0.8
-        if attending and stare is not None and stare >= self.s.stare_seconds \
+        if attending and eyes_usable and stare is not None and stare >= self.s.stare_seconds \
                 and not unconfirmed_dip \
                 and t - self._last_cue_t >= self.s.stare_seconds and self.s.blink_cue != "off":
             self._last_cue_t = t
@@ -126,6 +137,15 @@ class Engine:
                 self.suggestions.appendleft(sug)
                 out.append(sug)
         return out
+
+    def apply_settings(self) -> None:
+        """Pick up changed settings (the Settings object is shared; schedulers copy values)."""
+        b = self.breaks
+        b.micro_s = self.s.micro_break_minutes * 60
+        b.micro_len = self.s.micro_break_seconds
+        b.long_s = self.s.long_break_minutes * 60
+        b.long_len = self.s.long_break_seconds
+        b.adaptive = self.s.adaptive_breaks
 
     def end_break(self, outcome: str) -> Optional[BreakEnded]:
         """UI callback when a break overlay finishes ('timer') or is skipped."""
@@ -168,6 +188,10 @@ class Engine:
             "luminance": _r(lum, 0),
             "quality": self._quality_dict(),
             "people_in_view": f.faces if f is not None else 0,
+            "head_pitch_now": _r(f.pitch if f and f.face else None),
+            "face_px": _r(f.face_px if f and f.face else None, 0),
+            "eyes_hidden": bool(self.detector.eyes_hidden),
+            "eyes_visible": [_r(self.detector.vis_right, 3), _r(self.detector.vis_left, 3)],
             "screen_minutes": round(self._screen_s / 60, 1),
             "monitors_connected": self.monitors,
             "zones": [dict(index=z.index, yaw=round(z.center_yaw, 1), pitch=round(z.mean_pitch, 1),
@@ -244,7 +268,8 @@ class Engine:
         vals = [r[5] for r in self._recent if r[5] is not None and t - r[0] <= 60]
         face_px = statistics.median(vals) if len(vals) >= 10 else None
         lum = self._medians(t)[3]
-        return assess(self.detector.fps, face_px, lum, self.detector.noise)
+        hidden = (sum(h for _, h in self._hidden) / len(self._hidden)) if len(self._hidden) >= 10 else None
+        return assess(self.detector.fps, face_px, lum, self.detector.noise, hidden)
 
     def _context(self, t: float) -> CoachContext:
         dist, pitch, _, lum = self._medians(t)

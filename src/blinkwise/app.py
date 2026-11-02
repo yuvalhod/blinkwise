@@ -50,6 +50,7 @@ class App:
         self.stop = threading.Event()
         self.paused = threading.Event()
         self._snap_lock = threading.Lock()
+        self._settings_lock = threading.Lock()
         self._snapshot: Dict[str, Any] = {}
         self._wall_offset = 0.0
         self._last_publish = 0.0
@@ -66,10 +67,13 @@ class App:
         if self.want_dashboard:
             from .ui.dashboard import DashboardServer
             self.server = DashboardServer(self.s.dashboard_port, self.snapshot, self.history,
-                                          self._on_dashboard_action, lambda: self.s)
+                                          self._on_dashboard_action, lambda: self.s,
+                                          self._on_settings)
             url = self.server.start()
             print(f"Dashboard: {url}")
-            if self.open_browser:
+            if not self.demo and not self.s.setup_done:
+                webbrowser.open(url + "setup")      # first run: teach camera placement
+            elif self.open_browser:
                 webbrowser.open(url)
         worker = threading.Thread(target=self._worker_main, name="vision", daemon=True)
         worker.start()
@@ -153,7 +157,7 @@ class App:
                     time.sleep(0.2)
                     continue
                 if src is None:
-                    src = FrameSource(self.s.camera, max_fps=self.s.max_fps)
+                    src = FrameSource(self.s.camera, max_fps=self.s.max_fps, realtime=True)
                 item = src.read()
                 if item is None:
                     time.sleep(0.05)
@@ -206,6 +210,8 @@ class App:
                 ev = self.engine.end_break(cmd)
                 if ev is not None:
                     self._emit(ev)
+            elif cmd == "settings":
+                self.engine.apply_settings()
             elif cmd == "break_now":
                 b = self.engine.breaks
                 if b.active is None:
@@ -247,6 +253,9 @@ class App:
         elif action == "dashboard":
             if self.server is not None:
                 webbrowser.open(self.server.url)
+        elif action == "setup":
+            if self.server is not None:
+                webbrowser.open(self.server.url + "setup")
         elif action == "quit":
             self.stop.set()
             if self.tray is not None:
@@ -274,6 +283,17 @@ class App:
             return
         if sys.platform != "darwin":
             self.tray.start_background()
+
+    def _on_settings(self, changes: Dict[str, Any]) -> Settings:
+        """Validated settings change from the dashboard; applied live, then saved."""
+        with self._settings_lock:
+            self.s.apply_ui_changes(changes)
+            try:
+                self.s.save()
+            except OSError:
+                log.warning("could not save settings")
+        self.commands.put("settings")
+        return self.s
 
     def _on_dashboard_action(self, action: str) -> Dict[str, Any]:
         if action == "pause":

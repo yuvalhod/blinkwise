@@ -17,7 +17,7 @@ class FrameSource:
     """
 
     def __init__(self, source: Union[int, str] = 0, width: int = 640, height: int = 480,
-                 max_fps: Optional[float] = None):
+                 max_fps: Optional[float] = None, realtime: bool = False):
         os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")   # our own error message is clearer
         import cv2
 
@@ -36,6 +36,8 @@ class FrameSource:
             self.cap.set(cv2.CAP_PROP_FPS, 30)
         self.file_fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
         self.max_fps = max_fps
+        self.realtime = realtime          # pace a video file like a live camera
+        self._t0: Optional[float] = None
         self._index = 0
         self._last_emit = 0.0
 
@@ -51,6 +53,12 @@ class FrameSource:
         if self.is_file:
             t = self._index / self.file_fps
             self._index += 1
+            if self.realtime:
+                if self._t0 is None:
+                    self._t0 = time.monotonic() - t
+                wait = self._t0 + t - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
             return t, frame
         now = time.monotonic()
         if self.max_fps:

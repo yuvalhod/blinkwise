@@ -19,5 +19,6 @@ for t, frame in FrameSource(video):
     f = tracker.process(frame, t)
     rows.append({k: (round(v, 5) if isinstance(v, float) else v) for k, v in dataclasses.asdict(f).items()})
 meta = {"video": Path(video).name, "fps": FrameSource(video).file_fps}
+tracker.close()
 Path(out).write_text(json.dumps({**meta, "frames": rows}))
 print(f"{len(rows)} frames -> {out}")

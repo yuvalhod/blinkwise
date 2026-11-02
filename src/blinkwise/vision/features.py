@@ -27,4 +27,6 @@ class FrameFeatures:
     blink_score: Optional[float] = None   # MediaPipe eyeBlink blendshape mean (diagnostic only)
     faces: int = 0                        # faces in view (the user is chosen among them)
     face_px: Optional[float] = None       # face width in pixels (tracking-quality signal)
+    vis_right: Optional[float] = None     # per-eye iris contrast (eye visibility), see geometry
+    vis_left: Optional[float] = None
     eye_yaw: Optional[float] = None       # eye-in-head horizontal gaze, degrees (diagnostic, coarse)

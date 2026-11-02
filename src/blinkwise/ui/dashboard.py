@@ -24,8 +24,12 @@ log = logging.getLogger(__name__)
 ALLOWED_ACTIONS = {"pause", "resume", "break_now", "skip_break"}
 
 
+def _static(name: str) -> str:
+    return resources.files("blinkwise.ui").joinpath(f"static/{name}").read_text(encoding="utf-8")
+
+
 def _index_html() -> str:
-    return resources.files("blinkwise.ui").joinpath("static/index.html").read_text(encoding="utf-8")
+    return _static("index.html")
 
 
 class DashboardServer:
@@ -33,12 +37,14 @@ class DashboardServer:
                  get_snapshot: Optional[Callable[[], Dict[str, Any]]] = None,
                  history=None,
                  on_action: Optional[Callable[[str], Dict[str, Any]]] = None,
-                 get_settings: Optional[Callable[[], Any]] = None):
+                 get_settings: Optional[Callable[[], Any]] = None,
+                 on_settings: Optional[Callable[[Dict[str, Any]], Any]] = None):
         self.port = port
         self.get_snapshot = get_snapshot
         self.history = history
         self.on_action = on_action
         self.get_settings = get_settings
+        self.on_settings = on_settings
         self.token = secrets.token_urlsafe(24)
         self._httpd: Optional[ThreadingHTTPServer] = None
         self._thread: Optional[threading.Thread] = None
@@ -74,6 +80,7 @@ class DashboardServer:
     def _make_handler(self):
         server = self
         page = _index_html()
+        setup_page = _static("setup.html")
 
         class Handler(BaseHTTPRequestHandler):
             server_version = "Blinkwise"
@@ -109,6 +116,9 @@ class DashboardServer:
                 if u.path in ("/", "/index.html"):
                     html = page.replace("__BLINKWISE_TOKEN__", server.token)
                     return self._send(200, html.encode(), "text/html; charset=utf-8")
+                if u.path == "/setup":
+                    html = setup_page.replace("__BLINKWISE_TOKEN__", server.token)
+                    return self._send(200, html.encode(), "text/html; charset=utf-8")
                 if u.path == "/api/live":
                     snap = server.get_snapshot() if server.get_snapshot else None
                     return self._json({"running": snap is not None, **(snap or {})})
@@ -133,13 +143,20 @@ class DashboardServer:
                 if not secrets.compare_digest(self.headers.get("X-Blinkwise-Token", ""), server.token):
                     return self._send(403, b"bad token", "text/plain")
                 u = urlparse(self.path)
-                if u.path != "/api/action" or server.on_action is None:
-                    return self._send(404, b"not found", "text/plain")
                 n = min(int(self.headers.get("Content-Length") or 0), 4096)
                 try:
                     body = json.loads(self.rfile.read(n) or b"{}")
                 except ValueError:
                     return self._json({"error": "bad json"}, 400)
+                if not isinstance(body, dict):
+                    return self._json({"error": "expected an object"}, 400)
+                if u.path == "/api/settings" and server.on_settings is not None:
+                    try:
+                        return self._json(dataclasses.asdict(server.on_settings(body)))
+                    except (KeyError, ValueError, TypeError) as e:
+                        return self._json({"error": str(e)}, 400)
+                if u.path != "/api/action" or server.on_action is None:
+                    return self._send(404, b"not found", "text/plain")
                 action = body.get("action")
                 if action not in ALLOWED_ACTIONS:
                     return self._json({"error": "unknown action"}, 400)

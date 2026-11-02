@@ -11,6 +11,8 @@ Signals (all cheap, all already computed):
   * face brightness   - dim faces give noisy landmarks; blown-out ones lose lid edges
   * signal noise      - the blink detector's own robust noise estimate, the most
                         direct measure of whether a dip can be told from jitter
+  * eyes hidden       - share of time both irises are invisible in the pixels
+                        (sunglasses, glare on lenses) even though a face is found
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ class Quality:
 
 
 def assess(fps: float, face_px: Optional[float], luminance: Optional[float],
-           noise: Optional[float]) -> Quality:
+           noise: Optional[float], hidden_frac: Optional[float] = None) -> Quality:
     if face_px is None or fps <= 0:
         return Quality("unknown")
     level, reasons, tips = GOOD, [], []
@@ -67,6 +69,13 @@ def assess(fps: float, face_px: Optional[float], luminance: Optional[float],
         elif luminance > 225:
             worse(FAIR, "face is over-exposed", "Reduce direct light on your face or move away from "
                   "a bright window.")
+    if hidden_frac is not None:
+        tip = ("Remove sunglasses, and tilt your glasses or screen slightly to move reflections "
+               "off your lenses. A lamp to the side reflects less than one in front.")
+        if hidden_frac > 0.5:
+            worse(POOR, "can't see your eyes (sunglasses, glare on glasses, or something in the way)", tip)
+        elif hidden_frac > 0.2:
+            worse(FAIR, "your eyes are often hidden (glare or reflections?)", tip)
     if noise is not None:
         if noise > 0.06:
             worse(POOR, "eye tracking is very jittery", "Add light and keep the camera steady.")

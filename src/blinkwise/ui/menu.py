@@ -113,6 +113,8 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
         ]))
     items.append(Item.sep())
     items.append(Item(text="Open dashboard...", action="dashboard"))
+    poor = (snap.get("quality") or {}).get("level") == "poor"
+    items.append(Item(text="Fix camera setup..." if poor else "Check camera setup...", action="setup"))
     items.append(Item(text="Blink reminder", submenu=[
         Item(text=label, action=f"cue:{key}", checked=(blink_cue == key))
         for key, label in cue_choices]))
