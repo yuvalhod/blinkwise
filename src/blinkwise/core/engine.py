@@ -24,6 +24,8 @@ from .metrics import RollingStats
 
 AWAY_RESET_S = 2.0          # after this long without seeing the eyes, assume they blinked
 REST_OPENNESS = 0.5         # eyes this closed for a while = resting them (counts as a break)
+PERCLOS_OPENNESS = 0.2      # PERCLOS counts time with lids >= 80% closed (P80)
+PERCLOS_MAX_RUN_S = 5.0     # closures longer than this are deliberate rest, not drowsiness
 
 
 @dataclass
@@ -56,6 +58,7 @@ class Engine:
         self._last_blink_t: Optional[float] = None
         self._last_cue_t = -1e9
         self._closed_run = 0.0
+        self._p80_run = 0.0          # current >=80%-closed run (pending until the eyes reopen)
         self._last_coach_t = -1e9
         self._screen_s = 0.0
         self._total_blinks = 0
@@ -103,6 +106,7 @@ class Engine:
         # Eyes closed for a while = resting, which counts toward breaks.
         o = self.detector.openness
         self._closed_run = self._closed_run + dt if (o is not None and o < REST_OPENNESS) else 0.0
+        self._track_perclos(t, dt, o, attending)
         on_screen = attending and self._closed_run < 3.0
 
         low = self._low_blink()
@@ -157,6 +161,7 @@ class Engine:
             "incomplete_ratio_10m": _r(s10.incomplete_ratio, 3),
             "completeness_available": self.detector.fps >= self.detector.p.min_fps_for_completeness,
             "long_blinks_per_min_10m": _r(s10.long_per_min, 2),
+            "perclos_5m": _r(s5.perclos, 3),
             "target_blink_rate": list(RELAXED_BLINK_RATE),
             "distance_cm": _r(dist, 0),
             "head_pitch": _r(pitch), "head_yaw": _r(f.yaw if f and f.face else None),
@@ -207,6 +212,16 @@ class Engine:
                 self._minute.incomplete += int(not b.complete)
             self._minute.long += int(b.long)
         return [BlinkEvent(b, self.attention.current_zone)]
+
+    def _track_perclos(self, t: float, dt: float, o: Optional[float], attending: bool) -> None:
+        if attending and o is not None and o <= PERCLOS_OPENNESS:
+            self._p80_run += dt
+            return
+        # Eyes reopened (or tracking lost): count the closure unless it was a deliberate rest
+        # or happened during a break.
+        if 0 < self._p80_run <= PERCLOS_MAX_RUN_S and self.breaks.active is None:
+            self.stats.add_closed(t, self._p80_run)
+        self._p80_run = 0.0
 
     def _low_blink(self) -> bool:
         st = self.stats.window(self._last_t or 0.0, 600, min_observed_s=180)

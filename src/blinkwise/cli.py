@@ -30,6 +30,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     r.add_argument("--no-ui", action="store_true", help="no on-screen overlay; system notifications only")
     r.add_argument("--no-dashboard", action="store_true")
     r.add_argument("--open", action="store_true", help="open the dashboard in your browser")
+    r.add_argument("--no-tray", action="store_true", help="no menu-bar / system-tray icon")
 
     d = sub.add_parser("demo", help="try Blinkwise without a camera (simulated user)")
     d.add_argument("--speed", type=float, default=1.0, help="simulation speed multiplier")
@@ -53,6 +54,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     cf.add_argument("assignments", nargs="*")
     cf.add_argument("--reset", action="store_true")
 
+    st = sub.add_parser("selftest", help="30-second guided check that blink detection works for you")
+    st.add_argument("--camera", help="camera index or a video file (default from settings)")
+
     sub.add_parser("doctor", help="check that camera, model and UI work on this machine")
     sub.add_parser("science", help="the research behind Blinkwise's advice")
     w = sub.add_parser("wipe", help="delete all locally stored history")
@@ -67,7 +71,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     return {
         "run": cmd_run, "demo": cmd_demo, "analyze": cmd_analyze, "report": cmd_report,
         "dashboard": cmd_dashboard, "calibrate": cmd_calibrate, "config": cmd_config,
-        "doctor": cmd_doctor, "science": cmd_science, "wipe": cmd_wipe,
+        "doctor": cmd_doctor, "science": cmd_science, "wipe": cmd_wipe, "selftest": cmd_selftest,
     }[cmd](args)
 
 
@@ -78,7 +82,8 @@ def cmd_run(args) -> int:
     if args.camera is not None:
         s.camera = args.camera
     _first_run_notice()
-    App(s, ui=not args.no_ui, dashboard=not args.no_dashboard, open_browser=args.open).run()
+    App(s, ui=not args.no_ui, dashboard=not args.no_dashboard, open_browser=args.open,
+        tray=not args.no_tray).run()
     return 0
 
 
@@ -219,6 +224,37 @@ def cmd_calibrate(args) -> int:
     s.save()
     print(f"Calibrated: focal length {s.focal_px} px (from {len(samples)} frames). Saved.")
     return 0
+
+
+def cmd_selftest(args) -> int:
+    from .selftest import run_selftest, total_seconds
+    from .vision.camera import FrameSource
+    from .vision.tracker import FaceTracker, ensure_model
+
+    s = Settings.load()
+    source = args.camera if args.camera is not None else s.camera
+    tracker = FaceTracker(ensure_model(data_dir()), s.camera_hfov_deg, s.focal_px)
+    src = FrameSource(source, max_fps=30)
+    print(f"Blinkwise self-test ({total_seconds():.0f} s). Sit as you normally do and follow the prompts.\n")
+
+    def frames():
+        for t, frame in src:
+            yield tracker.process(frame, t)
+
+    def prompt(ph, i, n):
+        print(f"[{i}/{n}] {ph.prompt}  ({ph.seconds:.0f} s)", flush=True)
+
+    try:
+        rep = run_selftest(frames(), on_prompt=prompt)
+    finally:
+        src.release()
+        tracker.close()
+    print("\nResults")
+    print("\n".join(rep.lines()))
+    if rep.distance_cm:
+        print(f"\nEstimated distance to the camera: ~{rep.distance_cm:.0f} cm "
+              "(run `blinkwise calibrate` for better accuracy).")
+    return 0 if rep.passed else 1
 
 
 def cmd_config(args) -> int:

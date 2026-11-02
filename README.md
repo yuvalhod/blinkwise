@@ -4,7 +4,9 @@
 
 Everything runs locally. No images are stored or sent anywhere.
 
-![Dashboard](docs/img/dashboard.png)
+It lives in your menu bar as a closed eye with lashes. Click it to see how you're doing and to take a break, pause or open the dashboard.
+
+![Menu bar](docs/img/menubar.png)
 
 ## Why
 
@@ -22,6 +24,10 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 | **Multi-screen awareness** | Learns how many screens you *actually use* from your head pose. It shows the time split, how often you switch, how far you turn your head, and whether you blink less on one screen than another. |
 | **Posture and environment** | Estimates viewing distance from your iris size (about 11.7 mm in almost everyone), plus head tilt (a screen that's too high) and room lighting. |
 | **Coaching** | A handful of rules, each with a cooldown, a global anti-nag limit, and links to the research behind it. |
+| **Menu bar** | A closed eye with lashes. A dot means a break is due, a slash means paused (camera off), and when you've stared too long the eye blinks at you. Click it for today's status and a few actions: take a break, pause for 30 min or 1 h, open the dashboard, choose how you're reminded, start at login. |
+| **Tracking quality** | Grades frame rate, face size, lighting and jitter. When it can't see your eyes reliably it says so and pauses blink advice rather than give you wrong numbers. |
+| **Drowsiness** | PERCLOS (share of time the eyes are mostly closed), the standard camera measure of drowsiness. |
+| **Self-test** | `blinkwise selftest` checks in 30 seconds that detection works on *your* face and camera. |
 | **Dashboard** | A local web page with live numbers, today's blink rate, a top-down view of your screens, suggestions with sources, and 14-day history. |
 
 ![Overlays: blink cue, break card, suggestion](docs/img/overlays.png)
@@ -37,10 +43,10 @@ git clone https://github.com/blinkwise/blinkwise && cd blinkwise
 ```
 
 ```bash
-pip install -e .
+pip install -e ".[tray]"
 ```
 
-On Linux, install Tk for the on-screen cues (`sudo apt install python3-tk`). Without it, Blinkwise falls back to system notifications.
+The `[tray]` extra adds the menu-bar / system-tray icon (pystray + Pillow). On Linux, install Tk for the on-screen cues (`sudo apt install python3-tk`). Without it, Blinkwise falls back to system notifications.
 
 ## Use
 
@@ -49,6 +55,11 @@ blinkwise run --open
 ```
 
 This starts monitoring and opens the dashboard. Other commands:
+
+```bash
+blinkwise selftest
+```
+A 30-second guided check: look normally, blink 5 times, hold your eyes open, turn your head. It tells you whether tracking works for you and what to fix if not.
 
 ```bash
 blinkwise demo --speed 30 --open
@@ -95,15 +106,25 @@ webcam -> MediaPipe Face Landmarker (478 points, head pose) -> FrameFeatures (nu
 
 ### Accuracy
 
-Validated two ways (both run in CI):
+Run `python scripts/eval_blinks.py` for the full benchmark.
 
 | Data | Precision | Recall |
 |---|---|---|
-| Real webcam video, 31 hand-labelled blinks, 12 fps, large head movements ([Intel sample](https://github.com/intel-iot-devkit/sample-videos), `scripts/eval_blinks.py`) | **1.00** | **0.90** |
-| Simulated users, 30 fps, 30% partial and 3% long blinks, 3 keyboard glances/min, two screens (80 min) | 0.997 | 0.995 |
-| Complete vs. partial classification (simulated, 30 fps) | 100% correct | |
+| Real video, person A: 31 hand-labelled blinks, 12 fps, big head movements (development set) | **1.00** | **0.94** |
+| Real video, person B: 27 blinks, labelled *after* the detector was frozen (held-out) | **1.00** | **0.96** |
+| Simulated users, 30 fps, partial and long blinks, keyboard glances, two screens | 1.00 | 0.99 |
+| Same, with 3x camera noise (dim room / cheap webcam) | 1 false blink/hour | 0.97 |
+| Complete vs. partial classification (simulated, 30 fps) | 99.6-100% correct | |
 
-The three missed real blinks are the first frame of the clip (during warm-up), the last half-second (before the look-ahead window completes), and one slow blink during a 26° head nod. More labelled real-world data is the most valuable contribution you can make (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+Robustness on real pixels (held-out video, degraded on purpose):
+
+| Condition | Precision | Recall | Quality grade |
+|---|---|---|---|
+| Original | 1.00 | 1.00 | fair (12 fps) |
+| Low-resolution camera (0.4x) | 1.00 | 0.96 | fair |
+| Dim room + sensor noise | 0.93 | 0.48 | **poor** (blink advice paused) |
+
+In a very dark room, blinks get missed. Blinkwise doesn't invent any; it says it can't see well and asks for more light. Real-video tests use Intel's public [sample videos](https://github.com/intel-iot-devkit/sample-videos). More labelled real-world data is the most valuable contribution you can make (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 Performance: about 80 fps of processing on a laptop CPU. At the default 24 fps cap that's well under half a core, and it drops to 2 fps when nobody is in front of the camera.
 
@@ -127,7 +148,6 @@ Blinkwise is a habit tool. It doesn't diagnose or treat anything. See an eye-car
 
 ## Roadmap
 
-* System tray icon and an "auto-start at login" option.
 * Signed installers (PyInstaller) for people who don't use Python.
 * Optional end-of-day summary notification and weekly trends.
 * Per-app context (e.g. "you blink least in your IDE"), opt-in.

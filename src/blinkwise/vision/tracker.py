@@ -14,6 +14,7 @@ from typing import Optional
 import numpy as np
 
 from . import geometry as geo
+from .enhance import enhance_low_light, is_dark
 from .features import FrameFeatures
 
 log = logging.getLogger(__name__)
@@ -60,7 +61,8 @@ class FaceTracker:
     """Runs MediaPipe in VIDEO mode (temporal smoothing + tracking between frames)."""
 
     def __init__(self, model_path: Path, horizontal_fov_deg: float = 60.0,
-                 focal_px_override: Optional[float] = None, max_faces: int = 3):
+                 focal_px_override: Optional[float] = None, max_faces: int = 3,
+                 low_light: bool = True):
         os.environ.setdefault("GLOG_minloglevel", "2")      # silence MediaPipe's C++ logging
         os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
         import mediapipe as mp  # imported lazily so the engine is usable without it
@@ -83,6 +85,7 @@ class FaceTracker:
         self._last_ts_ms = -1
         self.last_iris_px: Optional[float] = None
         self.lock = UserLock()
+        self.low_light = low_light
 
     def process(self, frame_bgr: np.ndarray, t: float) -> FrameFeatures:
         import cv2
@@ -93,6 +96,9 @@ class FaceTracker:
             ts_ms = self._last_ts_ms + 1
         self._last_ts_ms = ts_ms
 
+        raw_gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        if self.low_light and is_dark(frame_bgr):
+            frame_bgr = enhance_low_light(frame_bgr)
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
         res = self._landmarker.detect_for_video(image, ts_ms)
@@ -115,7 +121,7 @@ class FaceTracker:
         if len(res.face_blendshapes) > idx:
             bs = {c.category_name: c.score for c in res.face_blendshapes[idx]}
             blink_score = (bs.get("eyeBlinkLeft", 0.0) + bs.get("eyeBlinkRight", 0.0)) / 2
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        gray = raw_gray      # report the *real* lighting, not the enhanced image
         x0, y0, x1, y1 = _box(pts)
         return FrameFeatures(
             t=t, face=True, ear_right=er, ear_left=el, width_right=wr, width_left=wl,

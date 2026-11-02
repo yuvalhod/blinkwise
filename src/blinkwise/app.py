@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import sys
 import threading
 import time
 import webbrowser
@@ -33,7 +34,8 @@ IDLE_FPS = 2.0
 class App:
     def __init__(self, settings: Settings, *, demo: bool = False, demo_speed: float = 1.0,
                  ui: bool = True, dashboard: bool = True, open_browser: bool = False,
-                 history_path: Optional[Path] = None, monitors: Optional[int] = -1):
+                 history_path: Optional[Path] = None, monitors: Optional[int] = -1,
+                 tray: bool = True):
         self.s = settings
         self.demo = demo
         self.demo_speed = max(0.1, demo_speed)
@@ -53,6 +55,11 @@ class App:
         self._last_publish = 0.0
         self.server = None
         self.error: Optional[BaseException] = None
+        self.want_tray = tray
+        self.tray = None
+        self._paused_until: Optional[float] = None    # monotonic time to auto-resume
+        self._today: Dict[str, Any] = {}
+        self._today_at = 0.0
 
     # ----------------------------------------------------------------- public
     def run(self) -> None:
@@ -66,13 +73,25 @@ class App:
                 webbrowser.open(url)
         worker = threading.Thread(target=self._worker_main, name="vision", daemon=True)
         worker.start()
+        self._start_tray()
         try:
-            if not (self.want_ui and self._run_tk()):
+            if self.tray is not None and sys.platform == "darwin":
+                # macOS: the menu-bar item must own the main thread.
+                threading.Thread(target=self._run_headless, kwargs={"quiet": True},
+                                 name="events", daemon=True).start()
+                print("Blinkwise is running in your menu bar.")
+                self.tray.run_blocking()
+            elif not (self.want_ui and self._run_tk()):
                 self._run_headless()
         except KeyboardInterrupt:
             pass
         finally:
             self.stop.set()
+            if self.tray is not None:
+                try:
+                    self.tray.stop()
+                except Exception:
+                    pass
             worker.join(timeout=5)
             if self.server:
                 self.server.stop()
@@ -166,8 +185,14 @@ class App:
         self.events.put(ev)
 
     def _publish(self) -> None:
+        self._check_auto_resume()
         snap = self.engine.snapshot()
-        snap.update(paused=self.paused.is_set(), demo=self.demo, stare_seconds=self.s.stare_seconds)
+        left = None
+        if self.paused.is_set() and self._paused_until:
+            left = self._paused_until - time.monotonic()
+        snap.update(paused=self.paused.is_set(), demo=self.demo, stare_seconds=self.s.stare_seconds,
+                    paused_for_s=None if left is None else max(0, round(left)),
+                    today=self._today_stats(), blink_cue=self.s.blink_cue)
         with self._snap_lock:
             self._snapshot = snap
 
@@ -187,11 +212,74 @@ class App:
                     b.since_micro = b.micro_interval(False)  # due on the next tick
                     b.snoozed_until = -1e9
 
+    def _today_stats(self) -> Dict[str, Any]:
+        if self.history is None or time.monotonic() - self._today_at < 60:
+            return self._today
+        self._today_at = time.monotonic()
+        try:
+            days = self.history.daily(1)
+            self._today = days[-1] if days else {}
+        except Exception:
+            log.debug("today stats unavailable", exc_info=True)
+        return self._today
+
+    def pause(self, minutes: Optional[float] = None) -> None:
+        self._paused_until = time.monotonic() + minutes * 60 if minutes else None
+        self.paused.set()
+
+    def resume(self) -> None:
+        self._paused_until = None
+        self.paused.clear()
+
+    def _check_auto_resume(self) -> None:
+        if self.paused.is_set() and self._paused_until and time.monotonic() >= self._paused_until:
+            self.resume()
+
+    def _on_tray_action(self, action: str) -> None:
+        if action.startswith("pause:"):
+            self.pause(float(action.split(":", 1)[1]) or None)
+        elif action.startswith("cue:"):
+            self.s.blink_cue = action.split(":", 1)[1]
+            try:
+                self.s.save()
+            except OSError:
+                log.warning("could not save settings")
+        elif action == "dashboard":
+            if self.server is not None:
+                webbrowser.open(self.server.url)
+        elif action == "quit":
+            self.stop.set()
+            if self.tray is not None:
+                self.tray.stop()
+        else:
+            self._on_dashboard_action(action)
+        self._publish_soon()
+
+    def _publish_soon(self) -> None:
+        # Only ever touch the engine from the vision thread: just ask it to republish now.
+        # (While paused, the worker republishes every 0.2 s anyway.)
+        self._last_publish = 0.0
+
+    def _start_tray(self) -> None:
+        if not (self.want_ui and self.want_tray and self.s.tray):
+            return
+        from .ui import tray as tray_mod
+        if not tray_mod.available():
+            return
+        try:
+            self.tray = tray_mod.Tray(self.snapshot, self._on_tray_action, lambda: self.s.blink_cue)
+        except Exception:
+            log.exception("could not create the tray icon")
+            self.tray = None
+            return
+        if sys.platform != "darwin":
+            self.tray.start_background()
+
     def _on_dashboard_action(self, action: str) -> Dict[str, Any]:
         if action == "pause":
-            self.paused.set()
+            self.pause()
         elif action == "resume":
-            self.paused.clear()
+            self.resume()
         elif action == "break_now":
             self.commands.put("break_now")
         elif action == "skip_break":
@@ -245,6 +333,8 @@ class App:
         elif isinstance(ev, StareCue):
             if self.s.blink_cue == "subtle":
                 cue.show()
+            elif self.s.blink_cue == "menubar" and self.tray is not None:
+                self.tray.blink()
             elif self.s.blink_cue == "notify":
                 native.notify("Blink", f"No blink for {ev.seconds_since_blink:.0f} s.")
         elif isinstance(ev, BreakDue):
@@ -258,23 +348,28 @@ class App:
         elif isinstance(ev, Suggestion) and ev.notify:
             toast.show(ev.title, ev.message)
 
-    def _run_headless(self) -> None:
-        print("Blinkwise is running (no on-screen overlay). Press Ctrl+C to quit.")
+    def _run_headless(self, quiet: bool = False) -> None:
+        """Event loop without Tk: system notifications, plus the tray icon when present."""
+        say = (lambda *a: None) if quiet else print
+        if not quiet:
+            print("Blinkwise is running (no on-screen overlay). Press Ctrl+C to quit.")
         while not self.stop.is_set():
             try:
                 ev = self.events.get(timeout=0.5)
             except queue.Empty:
                 continue
             if isinstance(ev, StareCue) and self.s.blink_cue != "off":
-                if self.s.blink_cue == "notify":
+                if self.tray is not None and self.s.blink_cue in ("menubar", "subtle"):
+                    self.tray.blink()          # without Tk, the menu-bar blink is the gentle cue
+                elif self.s.blink_cue == "notify":
                     native.notify("Blink", f"No blink for {ev.seconds_since_blink:.0f} s.")
             elif isinstance(ev, BreakDue):
-                print(f"[break] {ev.kind}: {ev.exercise}")
+                say(f"[break] {ev.kind}: {ev.exercise}")
                 native.notify("Eye break", ev.exercise or ev.reason)
             elif isinstance(ev, BreakEnded):
-                print(f"[break] {ev.kind} -> {ev.outcome}")
+                say(f"[break] {ev.kind} -> {ev.outcome}")
             elif isinstance(ev, Suggestion):
-                print(f"[{ev.severity}] {ev.title}: {ev.message}")
+                say(f"[{ev.severity}] {ev.title}: {ev.message}")
                 if ev.notify:
                     native.notify(ev.title, ev.message)
 

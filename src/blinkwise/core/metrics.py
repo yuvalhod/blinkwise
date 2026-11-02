@@ -20,6 +20,7 @@ class _Bucket:
     judged: int = 0          # blinks whose completeness could be judged (fps >= 20)
     incomplete: int = 0
     long: int = 0
+    closed: float = 0.0      # seconds with eyes >= 80% closed (PERCLOS numerator)
 
 
 @dataclass
@@ -30,6 +31,7 @@ class WindowStats:
     rate: Optional[float]              # blinks/min, None if not enough observed time
     incomplete_ratio: Optional[float]  # None if too few judged blinks
     long_per_min: Optional[float]
+    perclos: Optional[float] = None    # fraction of observed time with eyes >= 80% closed
 
 
 class RollingStats:
@@ -60,7 +62,7 @@ class RollingStats:
     def window(self, now: float, window_s: float, min_observed_s: float = 30.0,
                min_judged: int = 10) -> WindowStats:
         lo = int(now - window_s)
-        obs = blinks = judged = inc = lng = 0
+        obs = blinks = judged = inc = lng = closed = 0
         for k in reversed(self._b):
             if k < lo:
                 break
@@ -70,10 +72,15 @@ class RollingStats:
             judged += b.judged
             inc += b.incomplete
             lng += b.long
+            closed += b.closed
         enough = obs >= min_observed_s
         return WindowStats(
             window_s=window_s, observed_s=obs, blinks=blinks,
             rate=(blinks / obs * 60.0) if enough else None,
             incomplete_ratio=(inc / judged) if judged >= min_judged else None,
             long_per_min=(lng / obs * 60.0) if enough else None,
+            perclos=(min(1.0, closed / obs)) if enough else None,
         )
+
+    def add_closed(self, t: float, seconds: float) -> None:
+        self._bucket(t).closed += seconds

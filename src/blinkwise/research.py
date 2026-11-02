@@ -102,6 +102,15 @@ REFERENCES: Dict[str, Reference] = {r.key: r for r in [
         "incomplete blinking are key contributors.",
         "https://pubmed.ncbi.nlm.nih.gov/?term=Digital+eye+strain:+prevalence,+measurement+and+amelioration"),
     Reference(
+        "dinges1998",
+        "Dinges DF, Grace R. PERCLOS: A valid psychophysiological measure of alertness as "
+        "assessed by psychomotor vigilance. US Federal Highway Administration, "
+        "FHWA-MCRT-98-006, 1998.",
+        "The proportion of time the eyes are at least 80% closed (PERCLOS) tracked lapses of "
+        "attention better than other eye and head measures; it is the standard camera-based "
+        "drowsiness metric.",
+        "https://scholar.google.com/scholar?q=PERCLOS+A+valid+psychophysiological+measure+of+alertness"),
+    Reference(
         "soukupova2016",
         "Soukupova T, Cech J. Real-time eye blink detection using facial landmarks. 21st "
         "Computer Vision Winter Workshop, 2016.",

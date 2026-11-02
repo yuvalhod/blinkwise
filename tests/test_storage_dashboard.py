@@ -18,17 +18,19 @@ def _minute(blinks=8):
 
 def test_history_daily_rollup(tmp_path):
     h = History(tmp_path / "h.sqlite")
-    now = time.time()
+    # Anchor at local noon so the 10 minutes never straddle midnight.
+    lt = time.localtime()
+    now = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 12, 0, 0, 0, 0, -1))
     for i in range(10):
         h.record(_minute(), now - 600 + i * 60)
     h.record(BreakEnded("micro", "rested"), now)
     h.record(BreakEnded("micro", "skipped"), now)
     h.record(Suggestion("low_blink_rate", "warn", "t", "m"), now)
-    days = h.daily(7)
+    days = h.daily(7, now=now + 3600)
     assert days[-1]["blink_rate"] == 8.0 and days[-1]["screen_minutes"] == 10.0
     assert days[-1]["incomplete_ratio"] == 0.25
     assert (days[-1]["breaks_taken"], days[-1]["breaks_missed"]) == (1, 1)
-    assert len(h.minutes(1)) == 10
+    assert len(h.minutes(1, now=now)) == 10
     h.wipe()
     assert h.daily(7) == []
 

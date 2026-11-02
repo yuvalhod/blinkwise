@@ -38,7 +38,7 @@ class Settings:
 
     # --- blink coaching ------------------------------------------------------
     stare_seconds: float = 10.0           # show a blink cue after this long without blinking
-    blink_cue: str = "subtle"             # "subtle" on-screen cue, "notify", or "off"
+    blink_cue: str = "subtle"             # "subtle" on-screen eye, "menubar" icon blink, "notify", "off"
     low_blink_rate: float = 10.0          # blinks/min (5-min window) considered low
     very_low_blink_rate: float = 6.0
 
@@ -57,6 +57,7 @@ class Settings:
     profile: str = "adult"                # "adult" or "young" (adds myopia-prevention guidance)
     min_notification_gap_s: float = 180.0 # never nag more often than this
     dashboard_port: int = 8765
+    tray: bool = True                     # menu-bar / system-tray icon
     store_history: bool = True
 
     @classmethod

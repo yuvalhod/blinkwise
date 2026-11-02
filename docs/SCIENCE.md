@@ -39,6 +39,12 @@ Blinkwise only gives advice it can trace to evidence, and it says how strong tha
 
 **What Blinkwise does:** suggests the exercise during long breaks and when partial blinks are frequent.
 
+## 5b. Drowsiness: PERCLOS
+
+* Dinges & Grace (1998, US FHWA): the proportion of time the eyes are at least 80% closed (PERCLOS) tracked lapses of attention better than other eye and head measures. It's the standard camera-based drowsiness metric.
+
+**What Blinkwise does:** measures PERCLOS over 5 minutes. Closures longer than 5 s (deliberately resting your eyes) and time during breaks don't count. At 15% or more it suggests a real break. The 15% level is a commonly used alert threshold, not a medical cut-off.
+
 ## 6. Screen distance and height
 
 * AOA guidance: about 20-28 inches (50-70 cm) from the eyes, with the screen centre 15-20 degrees below eye level.

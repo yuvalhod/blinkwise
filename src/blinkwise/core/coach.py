@@ -130,6 +130,16 @@ def rule_incomplete_blinks(c: CoachContext, s: Settings) -> Optional[Suggestion]
 
 
 def rule_fatigue(c: CoachContext, s: Settings) -> Optional[Suggestion]:
+    """PERCLOS (share of time with eyes >= 80% closed) is the best-validated camera
+    measure of drowsiness; ~15% over a few minutes is a commonly used alert level."""
+    p5 = c.s5.perclos
+    if p5 is not None and c.s5.observed_s >= 180 and p5 >= 0.15:
+        return Suggestion(
+            "", "high", "You look drowsy",
+            f"Your eyes have been mostly closed {p5 * 100:.0f}% of the time over the last 5 "
+            "minutes. That's a validated sign of drowsiness, and attention suffers long before "
+            "you notice it. Take a proper break: stand up, get daylight or fresh air, or rest.",
+            refs=["dinges1998"], data={"perclos": round(p5, 3)})
     st = c.s10
     if st.long_per_min is None or st.observed_s < 300 or st.long_per_min < 1.5:
         return None
@@ -137,7 +147,7 @@ def rule_fatigue(c: CoachContext, s: Settings) -> Optional[Suggestion]:
         "", "warn", "Your eyes look tired",
         f"You're having frequent long eye closures ({st.long_per_min:.1f} per minute), a common "
         "sign of fatigue. Consider a proper break away from screens.",
-        refs=["sheppard2018"], data={"long_per_min": round(st.long_per_min, 2)})
+        refs=["sheppard2018", "dinges1998"], data={"long_per_min": round(st.long_per_min, 2)})
 
 
 def rule_too_close(c: CoachContext, s: Settings) -> Optional[Suggestion]:

@@ -69,6 +69,8 @@ th{color:var(--muted);font-weight:500}
 .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
 .kv div:nth-child(odd){color:var(--muted)}
 .empty{color:var(--muted);font-size:14px;padding:8px 0}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:14px}
+.banner strong{color:inherit}
 footer{margin-top:22px;color:var(--muted);font-size:12px}
 footer a{color:var(--accent)}
 .ring{display:flex;align-items:center;gap:14px}
@@ -88,6 +90,7 @@ footer a{color:var(--accent)}
     <button id="themeBtn" title="Toggle theme">Theme</button>
   </header>
 
+  <div id="qbanner" class="banner" hidden></div>
   <div class="grid">
     <section class="card c3">
       <p class="label">Blink rate (last 5 min)</p>
@@ -129,7 +132,7 @@ footer a{color:var(--accent)}
       <div id="suggestions"><div class="empty">Nothing yet. Suggestions appear once there's enough data (a few minutes).</div></div>
     </section>
     <section class="card c5">
-      <h2>Posture and environment</h2>
+      <h2>Tracking, posture and environment</h2>
       <div class="kv" id="env"></div>
       <p class="sub" style="margin-top:10px">Distance is estimated from your iris size (about 11.7 mm in most adults). Run <code>blinkwise calibrate</code> for better accuracy.</p>
     </section>
@@ -229,8 +232,19 @@ function renderEnv(d){
   rows.push(["Head tilt", d.head_pitch == null ? "--" : `${d.head_pitch > 0 ? "up" : "down"} ${Math.abs(d.head_pitch)} deg`]);
   rows.push(["Lighting on your face", d.luminance == null ? "--" : d.luminance < 45 ? `<span class="warn">dim</span>` : "OK"]);
   rows.push(["Displays connected", d.monitors_connected ?? "unknown"]);
-  rows.push(["Long blinks (fatigue)", d.long_blinks_per_min_10m == null ? "--" : `${d.long_blinks_per_min_10m}/min`]);
+  const pc = d.perclos_5m;
+  rows.push(["Drowsiness (PERCLOS)", pc == null ? "--" : `<span class="${pc >= .15 ? "bad" : pc >= .08 ? "warn" : "ok"}">${(pc*100).toFixed(1)}%</span> <span class="sub">eyes closed</span>`]);
+  rows.push(["Long blinks", d.long_blinks_per_min_10m == null ? "--" : `${d.long_blinks_per_min_10m}/min`]);
+  const q = d.quality || {level: "unknown"};
+  const qc = {good: "ok", fair: "warn", poor: "bad"}[q.level] || "";
+  rows.unshift(["Tracking quality", `<span class="${qc}" title="${esc((q.reasons||[]).join("; "))}">${esc(q.level)}</span>`]);
+  if ((d.people_in_view || 0) > 1) rows.push(["People in view", `${d.people_in_view} (tracking you)`]);
   $("env").innerHTML = rows.map(([k,v]) => `<div>${k}</div><div>${v}</div>`).join("");
+  const banner = $("qbanner");
+  if (q.level === "poor" && !d.paused){
+    banner.hidden = false;
+    banner.innerHTML = `<strong>Blinkwise can't see your eyes clearly</strong> (${esc((q.reasons||[]).join("; "))}). Blink advice is paused until tracking improves. ${esc((q.tips||[]).join(" "))}`;
+  } else banner.hidden = true;
 }
 
 function renderScreens(d){

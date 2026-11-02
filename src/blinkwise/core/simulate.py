@@ -29,6 +29,7 @@ class Scenario:
     blink_rate: float = 8.0               # per minute
     incomplete_frac: float = 0.2
     long_frac: float = 0.0
+    long_hold_s: float = 0.6              # how long "long" blinks stay closed
     screens: Sequence[Screen] = (Screen(0.0),)
     dwell_s: float = 25.0                 # mean time on a screen before switching
     keyboard_glances_per_min: float = 0.0
@@ -65,7 +66,7 @@ class Simulation:
             is_long = rng.random() < sc.long_frac
             if not any(a <= t <= b + 1.0 for a, b in sc.away):
                 self.truth.append(TruthBlink(t, complete, is_long))
-                t += 0.6 if is_long else 0.0
+                t += sc.long_hold_s if is_long else 0.0
             t += max(0.6, rng.expovariate(sc.blink_rate / 60.0))
         blinks = [(b, rng.uniform(0.05, 0.15) if b.complete else rng.uniform(0.45, 0.65))
                   for b in self.truth]
@@ -108,7 +109,7 @@ class Simulation:
             while bi < len(blinks) and blinks[bi][0].t < t - 1.0:
                 bi += 1
             for b, depth in blinks[bi:bi + 3]:
-                lid = min(lid, _lid_profile(t - b.t, depth, b.long))
+                lid = min(lid, _lid_profile(t - b.t, depth, b.long, sc.long_hold_s))
             yaw_n = yaw_s + rng.gauss(0, sc.pose_noise_deg)
             # Foreshortening: the far eye looks narrower when the head turns.
             wr = 30.0 * math.cos(math.radians(max(0.0, yaw_n) * 0.9))
@@ -126,13 +127,13 @@ class Simulation:
             )
 
 
-def _lid_profile(dt: float, depth: float, long: bool) -> float:
+def _lid_profile(dt: float, depth: float, long: bool, long_hold_s: float = 0.6) -> float:
     """Openness multiplier around a blink centred at dt=0.
 
     Closing ~75 ms, brief hold, re-opening ~150 ms (re-opening is slower than
     closing in real blinks). `depth` is the remaining openness at the bottom.
     """
-    close, hold, reopen = 0.075, (0.6 if long else 0.03), 0.15
+    close, hold, reopen = 0.075, (long_hold_s if long else 0.03), 0.15
     dt += hold / 2            # dt=0 is the middle of the closed phase
     if dt < -close or dt > hold + reopen:
         return 1.0

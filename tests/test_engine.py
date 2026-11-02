@@ -62,3 +62,27 @@ def test_absence_resets_stare_timer():
         eng.step(FrameFeatures(t=i / 30, face=False))
     eng.step(FrameFeatures(t=10.1, face=True, ear_right=.3, ear_left=.3, width_right=30, width_left=30))
     assert eng.seconds_since_blink < 0.5
+
+
+def test_perclos_flags_drowsiness_but_not_normal_blinking_or_rest():
+    drowsy = Scenario(duration_s=8 * 60, fps=20, blink_rate=15, long_frac=0.7, long_hold_s=1.6, seed=4)
+    eng, evs = run(drowsy)
+    assert eng.snapshot()["perclos_5m"] >= 0.15
+    assert any(isinstance(e, Suggestion) and e.rule == "fatigue" and e.severity == "high" for e in evs)
+
+    alert = Scenario(duration_s=8 * 60, fps=20, blink_rate=18, seed=4)
+    eng, evs = run(alert)
+    assert eng.snapshot()["perclos_5m"] < 0.06
+    assert not any(isinstance(e, Suggestion) and e.rule == "fatigue" for e in evs)
+
+
+def test_resting_eyes_closed_is_not_counted_as_drowsiness():
+    eng = Engine(Settings(), monitors=1)
+    t = 0.0
+    for _ in range(int(240 * 20)):         # 4 min: open, with one 30 s eyes-closed rest
+        t += 0.05
+        closed = 100 < t < 130
+        ear = 0.03 if closed else 0.3
+        eng.step(FrameFeatures(t=t, face=True, ear_right=ear, ear_left=ear, width_right=30,
+                               width_left=30, face_px=140, luminance=110))
+    assert (eng.snapshot()["perclos_5m"] or 0) < 0.02

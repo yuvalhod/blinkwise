@@ -49,6 +49,18 @@ src/blinkwise/
 
 Parameters were chosen on the labelled video and simulations, and sit on a wide plateau: on the real video, precision stays at 1.00 for any prominence threshold from 0.15 to 0.30 (`scripts/eval_blinks.py`).
 
+## Robustness
+
+* **User lock** (`vision/tracker.py: UserLock`): MediaPipe tracks up to 3 faces. Within 10 s of last seeing the user we follow the face nearest their last position, and if only *other* people are visible we report "no user" rather than adopting them. On a two-person video this cut identity switches from 3 to 0.
+* **Noise adaptation** (`vision/blink.py`): a robust running estimate of frame-to-frame jitter raises the minimum dip depth to 5 sigma, and a median-of-3 filter runs at 20 fps or more. With 3x simulated sensor noise, false blinks fell from 442/hour to 1/hour.
+* **Low light** (`vision/enhance.py`): dark frames get a gamma lift plus a 5x5 blur before landmarking (1.5 ms). Measured alternatives, including CLAHE, bilateral filtering and MediaPipe's own eyeBlink blendshape, did worse; see the module docstring.
+* **Quality gate** (`vision/quality.py`): fps, face size, lighting and jitter give a good/fair/poor grade. "Poor" pauses blink-based coaching and tells the user how to fix it.
+* **Eye-in-head gaze** (`geometry.eye_in_head_yaw`) is computed but *not* used for screen zones. At webcam resolution one pixel of iris error is about 6 degrees, and reading across a wide monitor sweeps the eyes +/-20 degrees.
+
+## Menu bar
+
+`ui/icon.py` draws the icon procedurally: a closed eye with lashes, plus open and half frames for the blink animation. It renders black + alpha so macOS can use it as a template image. `ui/menu.py` builds the dropdown as plain data, and `ui/tray.py` renders it with pystray. On macOS the tray owns the main thread and updates are marshalled with `AppHelper.callAfter`; elsewhere it runs in a background thread next to Tk. `scripts/render_menubar_mock.py` renders a design mock-up from the same code.
+
 ## Adding a coaching rule
 
 1. Write `rule_xxx(ctx, settings) -> Optional[Suggestion]` in `core/coach.py`. Keep it pure.
