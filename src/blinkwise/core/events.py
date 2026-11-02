@@ -62,3 +62,9 @@ class MinuteSummary:
     luminance: Optional[float]
     zones: int
     switches_per_min: float
+    session_min: float = 0.0        # continuous screen minutes when this minute began
+    down_s: float = 0.0             # looking down at a phone/tablet/paper
+    obs_down_s: float = 0.0
+    blinks_down: int = 0
+    device_switches: int = 0
+    stares20: int = 0

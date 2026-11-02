@@ -39,6 +39,10 @@ class Scenario:
     ear_open: float = 0.30
     ear_noise: float = 0.008
     pose_noise_deg: float = 1.0
+    phone: Sequence[Tuple[float, float]] = ()  # (start, end) looking down at a phone
+    phone_blink_factor: float = 1.0           # blink-rate multiplier while on the phone
+    decay_per_hour: float = 0.0               # blink rate falls this fraction per hour of
+                                              # continuous use (resets after 2+ min away)
     seed: int = 7
 
 
@@ -54,6 +58,20 @@ class Simulation:
     scenario: Scenario
     truth: List[TruthBlink] = field(default_factory=list)
 
+    def _rate_factor(self, t: float) -> float:
+        """Thinning factor for the blink process at time t (<= 1)."""
+        sc = self.scenario
+        f = 1.0
+        if sc.decay_per_hour:
+            start = 0.0
+            for a, b in sc.away:
+                if b <= t and b - a >= 120:
+                    start = max(start, b)
+            f *= max(0.3, 1.0 - sc.decay_per_hour * (t - start) / 3600.0)
+        if sc.phone and any(a <= t < b for a, b in sc.phone):
+            f *= sc.phone_blink_factor
+        return min(1.0, f)
+
     def frames(self) -> Iterator[FrameFeatures]:
         sc = self.scenario
         rng = random.Random(sc.seed)
@@ -64,7 +82,7 @@ class Simulation:
         while t < sc.duration_s - 1:
             complete = rng.random() >= sc.incomplete_frac
             is_long = rng.random() < sc.long_frac
-            if not any(a <= t <= b + 1.0 for a, b in sc.away):
+            if not any(a <= t <= b + 1.0 for a, b in sc.away) and rng.random() < self._rate_factor(t):
                 self.truth.append(TruthBlink(t, complete, is_long))
                 t += sc.long_hold_s if is_long else 0.0
             t += max(0.6, rng.expovariate(sc.blink_rate / 60.0))
@@ -98,7 +116,9 @@ class Simulation:
                 pi += 1
             target = plan[pi][1]
             down = any(a <= t < b for a, b in glances)
-            ty, tp = target.yaw, (target.pitch - 25.0 if down else target.pitch)
+            on_phone = any(a <= t < b for a, b in sc.phone)
+            ty = target.yaw
+            tp = target.pitch - (35.0 if on_phone else 25.0 if down else 0.0)
             # Saccade/head movement: fast exponential approach (~120 ms time constant).
             a = 1 - math.exp(-1.0 / (sc.fps * 0.12))
             yaw_s = ty if yaw_s is None else yaw_s + (ty - yaw_s) * a

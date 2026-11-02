@@ -46,7 +46,19 @@ class History:
         self._lock = threading.Lock()
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._db.executescript(SCHEMA)
+        self._migrate()
         self._db.commit()
+
+    # Columns added after v0.1, with defaults so older databases keep working.
+    _ADDED = (("session_min", "REAL NOT NULL DEFAULT 0"), ("down_s", "REAL NOT NULL DEFAULT 0"),
+              ("obs_down_s", "REAL NOT NULL DEFAULT 0"), ("blinks_down", "INTEGER NOT NULL DEFAULT 0"),
+              ("device_switches", "INTEGER NOT NULL DEFAULT 0"), ("stares20", "INTEGER NOT NULL DEFAULT 0"))
+
+    def _migrate(self) -> None:
+        have = {r[1] for r in self._db.execute("PRAGMA table_info(minutes)")}
+        for name, decl in self._ADDED:
+            if name not in have:
+                self._db.execute(f"ALTER TABLE minutes ADD COLUMN {name} {decl}")  # noqa: S608
 
     def close(self) -> None:
         with self._lock:
@@ -58,10 +70,14 @@ class History:
         with self._lock:
             if isinstance(ev, MinuteSummary):
                 self._db.execute(
-                    "INSERT OR REPLACE INTO minutes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO minutes (ts, observed_s, blinks, judged, incomplete, "
+                    "long_blinks, max_stare_s, distance_cm, pitch, yaw, luminance, zones, "
+                    "switches_per_min, session_min, down_s, obs_down_s, blinks_down, "
+                    "device_switches, stares20) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (int(wall), ev.observed_s, ev.blinks, ev.judged, ev.incomplete, ev.long,
                      ev.max_stare_s, ev.distance_cm, ev.pitch, ev.yaw, ev.luminance, ev.zones,
-                     ev.switches_per_min))
+                     ev.switches_per_min, ev.session_min, ev.down_s, ev.obs_down_s,
+                     ev.blinks_down, ev.device_switches, ev.stares20))
             elif isinstance(ev, BreakEnded):
                 self._db.execute("INSERT INTO breaks VALUES (?,?,?)", (int(wall), ev.kind, ev.outcome))
             elif isinstance(ev, Suggestion):
@@ -111,6 +127,15 @@ class History:
                 "breaks_missed": missed,
             })
         return out
+
+    def minute_rows(self, days: float = 14, now: Optional[float] = None) -> List[Dict[str, Any]]:
+        """All per-minute columns for analytics, oldest first."""
+        now = now or time.time()
+        with self._lock:
+            cur = self._db.execute("SELECT * FROM minutes WHERE ts >= ? ORDER BY ts",
+                                   (int(now - days * 86400),))
+            cols = [c[0] for c in cur.description]
+            return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
     def minutes(self, hours: float = 8, now: Optional[float] = None) -> List[Dict[str, Any]]:
         now = now or time.time()

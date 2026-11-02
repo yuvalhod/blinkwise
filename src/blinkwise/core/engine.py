@@ -23,6 +23,8 @@ from .events import BlinkEvent, BreakDue, BreakEnded, MinuteSummary, StareCue, S
 from .metrics import RollingStats
 
 AWAY_RESET_S = 2.0          # after this long without seeing the eyes, assume they blinked
+DOWN_DEG = 18.0             # head this far below your screen pitch = phone/desk/paper
+CONTINUOUS_RESET_S = 120.0  # away this long ends a continuous-use session
 REST_OPENNESS = 0.5         # eyes this closed for a while = resting them (counts as a break)
 PERCLOS_OPENNESS = 0.2      # PERCLOS counts time with lids >= 80% closed (P80)
 PERCLOS_MAX_RUN_S = 5.0     # closures longer than this are deliberate rest, not drowsiness
@@ -37,6 +39,12 @@ class _Minute:
     incomplete: int = 0
     long: int = 0
     max_stare: float = 0.0
+    session_min: float = 0.0     # continuous screen minutes at the start of this minute
+    down_s: float = 0.0          # looking well below the screen (phone, tablet, paper)
+    obs_down_s: float = 0.0      # ...with the eyes measurable
+    blinks_down: int = 0
+    device_switches: int = 0     # screen <-> looking down transitions
+    stares20: int = 0            # stares of 20 s or more
 
 
 class Engine:
@@ -59,6 +67,11 @@ class Engine:
         self._last_cue_t = -1e9
         self._closed_run = 0.0
         self._hidden: Deque[Tuple[float, bool]] = deque()    # eyes-hidden flags, last 60 s
+        self._continuous_s = 0.0      # screen time since the last real (2 min+) break
+        self._away_run = 0.0
+        self._down_now = False
+        self._down_since: Optional[float] = None
+        self._stare20_counted = False
         self._p80_run = 0.0          # current >=80%-closed run (pending until the eyes reopen)
         self._last_coach_t = -1e9
         self._screen_s = 0.0
@@ -129,7 +142,8 @@ class Engine:
                 self.break_due = None
 
         self._track_recent(t, f, attending)
-        out.extend(self._roll_minute(t, dt, attending, stare))
+        self._track_activity(t, dt, f, attending)
+        out.extend(self._roll_minute(t, dt, attending, stare, eyes_usable))
 
         if t - self._last_coach_t >= 10.0 and t - self._t0 >= 120.0:
             self._last_coach_t = t
@@ -229,8 +243,11 @@ class Engine:
         self.stats.add_blink(b)
         self.attention.add_blink()
         self._last_blink_t = max(self._last_blink_t or b.end, b.end)
+        self._stare20_counted = False
         if self._minute is not None:
             self._minute.blinks += 1
+            if self._down_now:
+                self._minute.blinks_down += 1
             if b.complete is not None:
                 self._minute.judged += 1
                 self._minute.incomplete += int(not b.complete)
@@ -280,13 +297,51 @@ class Engine:
             switches_per_min=self.attention.switches_per_min(t),
             screen_minutes=self._screen_s / 60.0, fps=self.detector.fps, quality=self.quality())
 
+    def screen_pitch(self) -> float:
+        """Your usual head pitch when looking at your screens (time-weighted over zones)."""
+        zones = self.attention.zones
+        if not zones:
+            return -5.0
+        return sum(z.mean_pitch * z.share for z in zones) / max(sum(z.share for z in zones), 1e-9)
+
+    def _track_activity(self, t: float, dt: float, f: FrameFeatures, attending: bool) -> None:
+        # Continuous use: resets only after a real break (2+ min away).
+        if attending:
+            self._continuous_s += dt
+            self._away_run = 0.0
+        else:
+            self._away_run += dt
+            if self._away_run >= CONTINUOUS_RESET_S:
+                self._continuous_s = 0.0
+        # Looking down at another device: well below your screen, sustained for 1 s.
+        below = f.face and f.pitch < self.screen_pitch() - DOWN_DEG
+        if below:
+            self._down_since = self._down_since if self._down_since is not None else t
+        else:
+            self._down_since = None
+        down = self._down_since is not None and t - self._down_since >= 1.0
+        m = self._minute
+        if m is not None:
+            if down:
+                m.down_s += dt
+                if self.detector.openness is not None:
+                    m.obs_down_s += dt
+            if down != self._down_now and (down or self._down_now):
+                m.device_switches += 1
+        self._down_now = down
+        stare = self.seconds_since_blink
+        if stare is not None and stare >= 20 and not self._stare20_counted and attending:
+            self._stare20_counted = True
+            if m is not None:
+                m.stares20 += 1
+
     def _roll_minute(self, t: float, dt: float, attending: bool,
-                     stare: Optional[float]) -> List[MinuteSummary]:
+                     stare: Optional[float], eyes_usable: bool = True) -> List[MinuteSummary]:
         m = self._minute
         if m is None:
-            self._minute = _Minute(start=t)
+            self._minute = _Minute(start=t, session_min=self._continuous_s / 60)
             return []
-        if attending:
+        if attending and eyes_usable:
             m.observed += dt
             if stare is not None:
                 m.max_stare = max(m.max_stare, stare)
@@ -298,8 +353,11 @@ class Engine:
             incomplete=m.incomplete, long=m.long, max_stare_s=round(m.max_stare, 1),
             distance_cm=dist, pitch=pitch, yaw=yaw, luminance=lum,
             zones=len(self.attention.zones),
-            switches_per_min=round(self.attention.switches_per_min(t), 2))
-        self._minute = _Minute(start=t)
+            switches_per_min=round(self.attention.switches_per_min(t), 2),
+            session_min=round(m.session_min, 1), down_s=round(m.down_s, 1),
+            obs_down_s=round(m.obs_down_s, 1), blinks_down=m.blinks_down,
+            device_switches=m.device_switches, stares20=m.stares20)
+        self._minute = _Minute(start=t, session_min=self._continuous_s / 60)
         return [summary]
 
 

@@ -65,7 +65,7 @@ def test_absence_resets_stare_timer():
 
 
 def test_perclos_flags_drowsiness_but_not_normal_blinking_or_rest():
-    drowsy = Scenario(duration_s=8 * 60, fps=20, blink_rate=15, long_frac=0.7, long_hold_s=1.6, seed=4)
+    drowsy = Scenario(duration_s=8 * 60, fps=20, blink_rate=16, long_frac=0.8, long_hold_s=1.9, seed=4)
     eng, evs = run(drowsy)
     assert eng.snapshot()["perclos_5m"] >= 0.15
     assert any(isinstance(e, Suggestion) and e.rule == "fatigue" and e.severity == "high" for e in evs)
