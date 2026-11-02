@@ -130,6 +130,13 @@ class DashboardServer:
                         return self._json({"daily": [], "minutes": []})
                     return self._json({"daily": server.history.daily(days),
                                        "minutes": server.history.minutes(hours)})
+                if u.path == "/api/insights":
+                    q = parse_qs(u.query)
+                    days = min(int(q.get("days", ["14"])[0]), 90)
+                    if server.history is None:
+                        return self._json({"hours_of_data": 0, "insights": []})
+                    from ..core.analytics import report
+                    return self._json(report(server.history.minute_rows(days)))
                 if u.path == "/api/science":
                     return self._json([dataclasses.asdict(r) for r in REFERENCES.values()])
                 if u.path == "/api/settings":

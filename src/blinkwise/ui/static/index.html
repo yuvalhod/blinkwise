@@ -137,6 +137,15 @@ footer a{color:var(--accent)}
       <p class="sub" style="margin-top:10px">Distance is estimated from your iris size (about 11.7 mm in most adults). Run <code>blinkwise calibrate</code> for better accuracy.</p>
     </section>
 
+    <section class="card c7">
+      <h2>Your patterns</h2>
+      <div id="patterns"><div class="empty">Patterns appear after a few hours of use.</div></div>
+    </section>
+    <section class="card c5">
+      <h2>Blinking vs. time without a break</h2>
+      <div id="decay"><div class="empty">Needs about 15 minutes of data in each range.</div></div>
+    </section>
+
     <section class="card c12">
       <h2>Last 14 days</h2>
       <div class="tablewrap" id="days"><div class="empty">No history yet.</div></div>
@@ -349,7 +358,46 @@ async function loadScience(){
 
 themeInit();
 loadScience().then(refreshLive);
+function renderPatterns(r){
+  const ins = r.insights || [];
+  if (ins.length){
+    $("patterns").innerHTML = ins.map(x => `<div class="sugg"><span class="chip info">pattern</span><div><strong>${esc(x.title)}</strong><p>${esc(x.detail)}</p></div></div>`).join("");
+  } else {
+    const need = Math.max(0, 3 - (r.hours_of_data || 0));
+    $("patterns").innerHTML = `<div class="empty">${need > 0 ? `About ${need.toFixed(1)} more hours of screen time needed to find your patterns.` : "No strong patterns yet. That's a good sign."}</div>`;
+  }
+  const dv = r.devices || {};
+  if (dv.down_share != null){
+    $("patterns").innerHTML += `<p class="sub" style="margin-top:10px">Looking at another device or paper: ${(dv.down_share*100).toFixed(0)}% of screen time${dv.switches_per_hour != null ? `, ${dv.switches_per_hour} switches/hour` : ""}${dv.rate_down != null ? `. Blinks there: ${dv.rate_down}/min vs ${dv.rate_screen ?? "--"}/min on screen` : ""}.</p>`;
+  }
+  const bins = (r.decay || {}).bins || [];
+  const shown = bins.filter(b => b.rate != null);
+  if (shown.length >= 2){
+    const W = 420, H = 200, L = 30, B = 34, T = 10, max = Math.max(20, ...shown.map(b => b.rate));
+    const bw = (W - L - 8) / bins.length;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Blink rate by minutes since your last break">`;
+    for (const v of [0,10,20]) { const y = T + (1 - v/max)*(H-T-B); svg += `<line x1="${L}" x2="${W-8}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-6}" y="${y+4}" text-anchor="end">${v}</text>`; }
+    bins.forEach((b,i) => {
+      const x = L + i*bw + 6, label = b.to ? `${b.from}-${b.to}` : `${b.from}+`;
+      if (b.rate != null){
+        const h = (b.rate/max)*(H-T-B), fat = r.decay.fatigue_after_min != null && b.from >= r.decay.fatigue_after_min;
+        svg += `<rect x="${x}" y="${T+(H-T-B)-h}" width="${bw-12}" height="${h}" rx="3" fill="${fat ? "var(--warn)" : "var(--accent)"}"/>`;
+        svg += `<text x="${x+(bw-12)/2}" y="${T+(H-T-B)-h-4}" text-anchor="middle" style="fill:var(--ink)">${Math.round(b.rate)}</text>`;
+      }
+      svg += `<text x="${x+(bw-12)/2}" y="${H-B+14}" text-anchor="middle">${label}</text>`;
+    });
+    svg += `<text x="${(W+L)/2}" y="${H-4}" text-anchor="middle">minutes since your last real break</text></svg>`;
+    $("decay").innerHTML = svg + (r.decay.fatigue_after_min != null ? `<p class="sub">Orange: blinking 20%+ below your fresh rate. A break every ~${r.decay.fatigue_after_min} min suits you.</p>` : "");
+  }
+}
+
+async function refreshPatterns(){
+  try { renderPatterns(await (await fetch("/api/insights?days=14")).json()); } catch(e){}
+}
+
 refreshHistory();
+refreshPatterns();
+setInterval(refreshPatterns, 300000);
 setInterval(refreshLive, 1000);
 setInterval(refreshHistory, 30000);
 </script>
