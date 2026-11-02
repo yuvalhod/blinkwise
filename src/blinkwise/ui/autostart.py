@@ -12,6 +12,13 @@ LABEL = "com.blinkwise.agent"
 
 
 def _command() -> List[str]:
+    if sys.platform == "darwin":
+        # Prefer the installed app bundle: launching through LaunchServices makes macOS
+        # attribute camera access to Blinkwise (not to Python) and shows the right icon.
+        from ..macos import default_location
+        app = default_location()
+        if app.exists():
+            return ["/usr/bin/open", "-a", str(app)]
     exe = sys.executable
     if sys.platform == "win32":          # no console window at login
         w = Path(exe).with_name("pythonw.exe")

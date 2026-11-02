@@ -34,7 +34,9 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 
 ## Install
 
-Requires Python 3.10+ and a webcam. Works on macOS, Windows and Linux.
+**Mac app (no Python needed):** download `Blinkwise.dmg` from the latest release, drag Blinkwise to Applications and open it. It lives in your menu bar (the closed eye). The first launch asks for camera access and opens a 2-minute setup guide. Builds are produced by `.github/workflows/release-macos.yml` (`packaging/build_macos.sh`); until they're signed with a Developer ID, right-click > Open the first time.
+
+**From Python (macOS, Windows, Linux):** requires Python 3.10+ and a webcam.
 
 Until the first PyPI release, install from source:
 
@@ -46,7 +48,7 @@ git clone https://github.com/blinkwise/blinkwise && cd blinkwise
 pip install -e ".[tray]"
 ```
 
-The `[tray]` extra adds the menu-bar / system-tray icon (pystray + Pillow). On Linux, install Tk for the on-screen cues (`sudo apt install python3-tk`). Without it, Blinkwise falls back to system notifications.
+The `[tray]` extra adds the menu-bar / system-tray icon (pystray + Pillow). On a Mac, `blinkwise install-app --login` then turns it into a real menu-bar app in ~/Applications that starts at login. On Linux, install Tk for the on-screen cues (`sudo apt install python3-tk`). Without it, Blinkwise falls back to system notifications.
 
 ## Use
 

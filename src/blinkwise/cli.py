@@ -31,6 +31,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     r.add_argument("--no-dashboard", action="store_true")
     r.add_argument("--open", action="store_true", help="open the dashboard in your browser")
     r.add_argument("--no-tray", action="store_true", help="no menu-bar / system-tray icon")
+    r.add_argument("--app", action="store_true", help=argparse.SUPPRESS)   # launched as Blinkwise.app
 
     d = sub.add_parser("demo", help="try Blinkwise without a camera (simulated user)")
     d.add_argument("--speed", type=float, default=1.0, help="simulation speed multiplier")
@@ -57,6 +58,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     st = sub.add_parser("selftest", help="30-second guided check that blink detection works for you")
     st.add_argument("--camera", help="camera index or a video file (default from settings)")
 
+    ia = sub.add_parser("install-app", help="macOS: install Blinkwise.app (menu-bar app) in ~/Applications")
+    ia.add_argument("--dest", help="where to put Blinkwise.app (default ~/Applications/Blinkwise.app)")
+    ia.add_argument("--login", action="store_true", help="also start it at login")
+    sub.add_parser("uninstall-app", help="macOS: remove Blinkwise.app and its login item")
+
     sub.add_parser("doctor", help="check that camera, model and UI work on this machine")
     sub.add_parser("science", help="the research behind Blinkwise's advice")
     w = sub.add_parser("wipe", help="delete all locally stored history")
@@ -72,6 +78,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "run": cmd_run, "demo": cmd_demo, "analyze": cmd_analyze, "report": cmd_report,
         "dashboard": cmd_dashboard, "calibrate": cmd_calibrate, "config": cmd_config,
         "doctor": cmd_doctor, "science": cmd_science, "wipe": cmd_wipe, "selftest": cmd_selftest,
+        "install-app": cmd_install_app, "uninstall-app": cmd_uninstall_app,
     }[cmd](args)
 
 
@@ -81,7 +88,10 @@ def cmd_run(args) -> int:
     s = Settings.load()
     if args.camera is not None:
         s.camera = args.camera
-    _first_run_notice()
+    if getattr(args, "app", False):
+        logging.getLogger().setLevel(logging.INFO)     # the launcher sends output to a log file
+    else:
+        _first_run_notice()
     App(s, ui=not args.no_ui, dashboard=not args.no_dashboard, open_browser=args.open,
         tray=not args.no_tray).run()
     return 0
@@ -255,6 +265,34 @@ def cmd_selftest(args) -> int:
         print(f"\nEstimated distance to the camera: ~{rep.distance_cm:.0f} cm "
               "(run `blinkwise calibrate` for better accuracy).")
     return 0 if rep.passed else 1
+
+
+def cmd_install_app(args) -> int:
+    from . import macos
+    from .ui import autostart
+    dest = Path(args.dest).expanduser() if args.dest else None
+    try:
+        app = macos.install(dest)
+    except ImportError:
+        print('The app icon needs Pillow: pip install "blinkwise[tray]"', file=sys.stderr)
+        return 1
+    print(f"Installed {app}")
+    if sys.platform != "darwin":
+        print("(Built anyway, but .app bundles only run on macOS.)")
+    if args.login:
+        print(f"Start at login: {autostart.enable()}")
+    print("Open it from Applications or Spotlight. The first launch asks for camera access "
+          "and opens a 2-minute setup guide.")
+    return 0
+
+
+def cmd_uninstall_app(args) -> int:
+    from . import macos
+    from .ui import autostart
+    removed = macos.uninstall()
+    autostart.disable()
+    print("Removed Blinkwise.app and the login item." if removed else "Blinkwise.app wasn't installed.")
+    return 0
 
 
 def cmd_config(args) -> int:

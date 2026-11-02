@@ -110,3 +110,34 @@ def _lashes(d, cx, cy, rx, length, lw, c, up: bool, curve: float, n: int = 5) ->
 def blink_animation(size: int = 44, color: Color = (0, 0, 0, 255)):
     """Frames for the menu-bar stare cue: the eye opens and closes ("blink with me")."""
     return [render(s, size, color) for s in BLINK_FRAMES]
+
+
+def app_icon(size: int = 1024):
+    """The app icon (Dock/Finder/Launchpad): a white lashed eye on a teal squircle.
+
+    Follows the macOS icon grid: the shape fills ~80% of the canvas with transparent
+    margins, and the corner radius is ~22% of the shape.
+    """
+    from PIL import Image, ImageDraw
+
+    ss = 2
+    S = size * ss
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    m = S * 0.1
+    box = [m, m, S - m, S - m]
+    # Vertical gradient: deep teal -> lighter teal.
+    grad = Image.new("RGBA", (S, S))
+    gd = ImageDraw.Draw(grad)
+    top, bot = (18, 120, 100), (64, 190, 160)
+    for y in range(S):
+        f = y / (S - 1)
+        rgb = tuple(int(a + (b - a) * f) for a, b in zip(top, bot, strict=True))
+        gd.line([(0, y), (S, y)], fill=rgb + (255,))
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(box, radius=(S - 2 * m) * 0.225, fill=255)
+    img.paste(grad, (0, 0), mask)
+    glyph = render("watching", int(S * 0.62), (255, 255, 255, 255))
+    gx = (S - glyph.width) // 2
+    gy = int((S - glyph.height) / 2 + S * 0.02)
+    img.alpha_composite(glyph, (gx, gy))
+    return img.resize((size, size), Image.LANCZOS)

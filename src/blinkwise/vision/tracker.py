@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 import shutil
+import sys
 import tempfile
 import urllib.request
 from pathlib import Path
@@ -24,6 +25,41 @@ MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/"
 MODEL_SHA256 = "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff"
 
 
+def _import_mediapipe():
+    """Import MediaPipe Tasks without dragging in matplotlib.
+
+    mediapipe.tasks.python.vision eagerly imports its drawing utilities, which import
+    matplotlib.pyplot: ~0.5 s per start, a font-cache build (minutes) on a fresh
+    machine, and tens of MB in a packaged app, for code Blinkwise never calls. The
+    drawing module only uses pyplot inside functions, so a placeholder is enough while
+    importing; it's removed afterwards so real matplotlib still works if anything
+    else needs it.
+    """
+    import types
+
+    stubbed = []
+    if "matplotlib" not in sys.modules:
+        for name in ("matplotlib", "matplotlib.pyplot"):
+            sys.modules[name] = types.ModuleType(name)
+            stubbed.append(name)
+    try:
+        import mediapipe as mp
+        from mediapipe.tasks.python import BaseOptions, vision
+    finally:
+        for name in stubbed:
+            sys.modules.pop(name, None)
+    return mp, BaseOptions, vision
+
+
+def bundled_model() -> Optional[Path]:
+    """The model shipped inside a packaged app (PyInstaller), if any: no download needed."""
+    base = getattr(sys, "_MEIPASS", None)
+    if not base:
+        return None
+    p = Path(base) / "blinkwise" / "models" / "face_landmarker.task"
+    return p if p.exists() and _sha256(p) == MODEL_SHA256 else None
+
+
 def ensure_model(data_dir: Path, url: str = MODEL_URL) -> Path:
     """Return a verified local copy of the face landmarker model, downloading once.
 
@@ -33,6 +69,9 @@ def ensure_model(data_dir: Path, url: str = MODEL_URL) -> Path:
     override = os.environ.get("BLINKWISE_MODEL")
     if override:
         return Path(override)
+    bundled = bundled_model()
+    if bundled is not None:
+        return bundled
     path = data_dir / "face_landmarker.task"
     if path.exists() and _sha256(path) == MODEL_SHA256:
         return path
@@ -65,8 +104,7 @@ class FaceTracker:
                  low_light: bool = True, zoom: bool = True):
         os.environ.setdefault("GLOG_minloglevel", "2")      # silence MediaPipe's C++ logging
         os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-        import mediapipe as mp  # imported lazily so the engine is usable without it
-        from mediapipe.tasks.python import BaseOptions, vision
+        mp, BaseOptions, vision = _import_mediapipe()
 
         self._mp = mp
         opts = vision.FaceLandmarkerOptions(

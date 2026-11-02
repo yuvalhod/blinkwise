@@ -23,7 +23,6 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=1.23",
-  "opencv-python>=4.8",
   "mediapipe>=0.10.14",
   "screeninfo>=0.8",
 ]

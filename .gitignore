@@ -11,3 +11,5 @@ dist/
 *.task
 *.mp4
 .DS_Store
+packaging/face_landmarker.task
+packaging/Blinkwise.icns
