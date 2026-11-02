@@ -34,7 +34,7 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 
 ## Install
 
-**Mac app (no Python needed):** download `Blinkwise.dmg` from the latest release, drag Blinkwise to Applications and open it. It lives in your menu bar (the closed eye). The first launch asks for camera access and opens a 2-minute setup guide. Builds are produced by `.github/workflows/release-macos.yml` (`packaging/build_macos.sh`); until they're signed with a Developer ID, right-click > Open the first time.
+**Mac app (no Python needed):** download `Blinkwise.dmg` from the latest release, drag Blinkwise to Applications and open it. It lives in your menu bar (the eye icon). The first launch asks for camera access and opens a 2-minute setup guide. Builds are produced by `.github/workflows/release-macos.yml` (`packaging/build_macos.sh`); until they're signed with a Developer ID, right-click > Open the first time.
 
 **From Python (macOS, Windows, Linux):** requires Python 3.10+ and a webcam.
 
