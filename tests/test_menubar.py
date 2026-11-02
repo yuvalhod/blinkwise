@@ -38,7 +38,8 @@ def test_closed_eye_has_lashes_below_the_lid():
     assert lower > 20
 
 
-SNAP = dict(running=True, face=True, paused=False, blink_rate_5m=8.4, seconds_since_blink=4.2,
+SNAP = dict(running=True, face=True, paused=False, preset="balanced", blink_rate_5m=8.4,
+            seconds_since_blink=4.2,
             next_break_s=725, break_active=None, quality={"level": "good"},
             today={"screen_minutes": 200.0, "breaks_taken": 4})
 
@@ -50,8 +51,10 @@ def test_menu_reads_in_plain_words():
     assert "Last blink: 4 s ago" in text
     assert "Next eye break: in 12 min" in text
     assert "Today: 3 h 20 min on screen, 4 breaks" in text
-    assert "Take a 20-second eye break" in text and "Pause >" in text
-    assert "  (x) Blink the menu bar icon" in text and "( ) Start at login" in text
+    assert "Take a 20-second eye break" in text and "Pause camera >" in text
+    assert "Quiet for 1 hour (keep measuring)" in text
+    assert "  (x) Balanced" in text and "  ( ) Coach - big prompts, full-screen breaks" in text
+    assert "( ) Start at login" in text
     assert text[-1] == "Quit Blinkwise"
 
 
@@ -114,4 +117,35 @@ def test_menu_actions_drive_the_app(tmp_path):
     assert app.commands.get_nowait() == "break_now"
     app._on_tray_action("quit")
     assert app.stop.is_set()
+    app.history.close()
+
+
+def test_menu_quiet_and_custom_style():
+    quiet = flatten(build_menu({**SNAP, "quiet_for_s": 2400}, blink_cue="subtle", autostart=None))
+    assert quiet[0] == "Blinkwise: Quiet - measuring, no pop-ups (40 min left)"
+    assert "End quiet time (40 min left)" in quiet
+    custom = flatten(build_menu({**SNAP, "preset": "custom"}, blink_cue="subtle", autostart=None))
+    assert "  Custom (set in the dashboard)" in custom
+
+
+def test_quiet_and_presets_from_the_menu(tmp_path):
+    from blinkwise.app import App
+    from blinkwise.config import Settings
+    from blinkwise.core.events import Suggestion
+
+    app = App(Settings(), demo=True, ui=False, dashboard=False, tray=False,
+              history_path=tmp_path / "h.sqlite", monitors=1)
+    warn = Suggestion("too_close", "warn", "t", "m", notify=True)
+    info = Suggestion("multi_screen", "info", "t", "m", notify=True)
+    assert app._should_notify(warn) and not app._should_notify(info)    # "important" default
+    app._on_tray_action("quiet:60")
+    assert app.quiet and not app._should_notify(warn)
+    app._on_tray_action("quiet:0")
+    assert not app.quiet
+    app._on_tray_action("preset:gentle")
+    assert app.s.preset == "gentle" and not app._should_notify(warn)    # gentle: no pop-ups
+    assert Settings.load().preset == "gentle"
+    app._on_tray_action("preset:coach")
+    assert app._should_notify(info)                                    # coach: all
+    assert app.commands.get_nowait() == "settings"
     app.history.close()

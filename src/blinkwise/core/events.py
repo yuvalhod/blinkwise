@@ -18,6 +18,7 @@ class BlinkEvent:
 class StareCue:
     """No blink for a while: show a gentle blink prompt (Nosch et al. 2015)."""
     seconds_since_blink: float
+    style: str = "subtle"         # which cue to show (adaptive mode may change it)
 
 
 @dataclass

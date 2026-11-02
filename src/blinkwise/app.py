@@ -59,6 +59,7 @@ class App:
         self.want_tray = tray
         self.tray = None
         self._paused_until: Optional[float] = None    # monotonic time to auto-resume
+        self._quiet_until: Optional[float] = None     # monotonic time quiet mode ends
         self._today: Dict[str, Any] = {}
         self._today_at = 0.0
 
@@ -77,15 +78,18 @@ class App:
                 webbrowser.open(url)
         worker = threading.Thread(target=self._worker_main, name="vision", daemon=True)
         worker.start()
-        self._start_tray()
+        if sys.platform != "darwin":
+            self._start_tray()                 # background thread next to Tk
         try:
-            if self.tray is not None and sys.platform == "darwin":
-                # macOS: the menu-bar item must own the main thread.
+            if self.want_ui and self._run_tk():   # macOS: the tray attaches inside _run_tk
+                pass
+            elif sys.platform == "darwin" and self._start_tray(owns_main=True):
+                # macOS without Tk: the menu-bar item owns the main thread.
                 threading.Thread(target=self._run_headless, kwargs={"quiet": True},
                                  name="events", daemon=True).start()
                 print("Blinkwise is running in your menu bar.")
                 self.tray.run_blocking()
-            elif not (self.want_ui and self._run_tk()):
+            else:
                 self._run_headless()
         except KeyboardInterrupt:
             pass
@@ -196,7 +200,10 @@ class App:
             left = self._paused_until - time.monotonic()
         snap.update(paused=self.paused.is_set(), demo=self.demo, stare_seconds=self.s.stare_seconds,
                     paused_for_s=None if left is None else max(0, round(left)),
-                    today=self._today_stats(), blink_cue=self.s.blink_cue)
+                    today=self._today_stats(), blink_cue=self.s.blink_cue,
+                    preset=self.s.preset,
+                    quiet_for_s=(round(self._quiet_until - time.monotonic())
+                                 if self.quiet else None))
         with self._snap_lock:
             self._snapshot = snap
 
@@ -244,6 +251,10 @@ class App:
     def _on_tray_action(self, action: str) -> None:
         if action.startswith("pause:"):
             self.pause(float(action.split(":", 1)[1]) or None)
+        elif action.startswith("quiet:"):
+            self.set_quiet(float(action.split(":", 1)[1]) or None)
+        elif action.startswith("preset:"):
+            self._on_settings({"preset": action.split(":", 1)[1]})
         elif action.startswith("cue:"):
             self.s.blink_cue = action.split(":", 1)[1]
             try:
@@ -269,20 +280,25 @@ class App:
         # (While paused, the worker republishes every 0.2 s anyway.)
         self._last_publish = 0.0
 
-    def _start_tray(self) -> None:
+    def _start_tray(self, owns_main: bool = False, dispatch=None) -> bool:
+        """Create the tray icon. Returns True if it exists."""
         if not (self.want_ui and self.want_tray and self.s.tray):
-            return
+            return False
         from .ui import tray as tray_mod
         if not tray_mod.available():
-            return
+            return False
         try:
-            self.tray = tray_mod.Tray(self.snapshot, self._on_tray_action, lambda: self.s.blink_cue)
+            self.tray = tray_mod.Tray(self.snapshot, self._on_tray_action,
+                                      lambda: self.s.blink_cue, dispatch=dispatch)
         except Exception:
             log.exception("could not create the tray icon")
             self.tray = None
-            return
+            return False
         if sys.platform != "darwin":
             self.tray.start_background()
+        elif not owns_main:
+            self.tray.attach()                 # macOS + Tk: share Tk's app loop
+        return True
 
     def _on_settings(self, changes: Dict[str, Any]) -> Settings:
         """Validated settings change from the dashboard; applied live, then saved."""
@@ -320,9 +336,15 @@ class App:
             return False
         root.withdraw()
         root.title("Blinkwise")
+        if sys.platform == "darwin":
+            # Tk created the NSApplication; the menu-bar item joins its event loop, and
+            # every tray update is marshalled onto this thread through the event queue.
+            self._start_tray(dispatch=lambda fn: self.events.put(("call", fn)))
         cue = overlay.BlinkCue(root)
         card = overlay.BreakCard(root, on_done=self.commands.put)
         toast = overlay.Toast(root, self.server.url if self.server else None)
+        self._big = overlay.BigBlink(root)
+        self._immersive = overlay.ImmersiveBreak(root, on_done=self.commands.put)
 
         def pump():
             if self.stop.is_set():
@@ -348,25 +370,56 @@ class App:
         return True
 
     def _handle_ui_event(self, ev, cue, card, toast) -> None:
+        if isinstance(ev, tuple) and ev[0] == "call":
+            ev[1]()                                     # tray update marshalled to this thread
+            return
         if isinstance(ev, tuple) and ev[0] == "close_break":
             card.finish("skipped", notify_engine=False)
-        elif isinstance(ev, StareCue):
-            if self.s.blink_cue == "subtle":
+            self._immersive.finish("skipped", notify_engine=False)
+            return
+        if isinstance(ev, BreakEnded):
+            if ev.outcome in ("rested", "missed"):     # engine decided; close quietly
+                card.finish(ev.outcome, notify_engine=False)
+                self._immersive.finish(ev.outcome, notify_engine=False)
+            return
+        if self.quiet:
+            return                                      # Quiet: keep measuring, no pop-ups
+        if isinstance(ev, StareCue):
+            style = ev.style
+            if style == "big":
+                self._big.show()
+            elif style == "subtle":
                 cue.show()
-            elif self.s.blink_cue == "menubar" and self.tray is not None:
-                self.tray.blink()
-            elif self.s.blink_cue == "notify":
+            elif style == "menubar":
+                if self.tray is not None:
+                    self.tray.blink()
+                else:
+                    cue.show()
+            elif style == "notify":
                 native.notify("Blink", f"No blink for {ev.seconds_since_blink:.0f} s.")
         elif isinstance(ev, BreakDue):
             if self.s.break_style == "notify":
                 native.notify("Eye break", ev.exercise or ev.reason)
+            elif self.s.break_style == "immersive":
+                self._immersive.show(ev.kind, ev.seconds, ev.exercise, self.s.skip_delay_s)
             else:
                 card.show(ev.kind, ev.seconds, ev.reason, ev.exercise)
-        elif isinstance(ev, BreakEnded):
-            if ev.outcome in ("rested", "missed"):     # engine decided; close the card quietly
-                card.finish(ev.outcome, notify_engine=False)
-        elif isinstance(ev, Suggestion) and ev.notify:
+        elif isinstance(ev, Suggestion) and self._should_notify(ev):
             toast.show(ev.title, ev.message)
+
+    # ------------------------------------------------------------- quiet mode
+    @property
+    def quiet(self) -> bool:
+        return self._quiet_until is not None and time.monotonic() < self._quiet_until
+
+    def set_quiet(self, minutes: Optional[float]) -> None:
+        self._quiet_until = time.monotonic() + minutes * 60 if minutes else None
+
+    def _should_notify(self, ev: Suggestion) -> bool:
+        mode = self.s.notify_suggestions
+        if not ev.notify or mode == "none" or self.quiet:
+            return False
+        return mode == "all" or ev.severity in ("warn", "high")
 
     def _run_headless(self, quiet: bool = False) -> None:
         """Event loop without Tk: system notifications, plus the tray icon when present."""
@@ -378,10 +431,12 @@ class App:
                 ev = self.events.get(timeout=0.5)
             except queue.Empty:
                 continue
-            if isinstance(ev, StareCue) and self.s.blink_cue != "off":
-                if self.tray is not None and self.s.blink_cue in ("menubar", "subtle"):
-                    self.tray.blink()          # without Tk, the menu-bar blink is the gentle cue
-                elif self.s.blink_cue == "notify":
+            if self.quiet and not isinstance(ev, BreakEnded):
+                continue
+            if isinstance(ev, StareCue) and ev.style != "off":
+                if self.tray is not None and ev.style in ("menubar", "subtle", "big"):
+                    self.tray.blink()          # without Tk, the menu-bar blink is the cue
+                elif ev.style == "notify":
                     native.notify("Blink", f"No blink for {ev.seconds_since_blink:.0f} s.")
             elif isinstance(ev, BreakDue):
                 say(f"[break] {ev.kind}: {ev.exercise}")
@@ -390,7 +445,7 @@ class App:
                 say(f"[break] {ev.kind} -> {ev.outcome}")
             elif isinstance(ev, Suggestion):
                 say(f"[{ev.severity}] {ev.title}: {ev.message}")
-                if ev.notify:
+                if self._should_notify(ev):
                     native.notify(ev.title, ev.message)
 
 

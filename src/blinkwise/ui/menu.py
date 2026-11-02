@@ -35,6 +35,10 @@ class Item:
         return Item(text=text, enabled=False, info=True)
 
 
+STYLE_CHOICES = (("gentle", "Gentle - menu bar only"),
+                 ("balanced", "Balanced"),
+                 ("coach", "Coach - big prompts, full-screen breaks"))
+
 CUE_CHOICES = (("menubar", "Blink the menu bar icon"),
                ("subtle", "Small eye on screen"),
                ("notify", "Notification"),
@@ -64,6 +68,8 @@ def duration(seconds: float) -> str:
 
 
 def status_title(snap: Dict[str, Any]) -> str:
+    if snap.get("quiet_for_s") and not snap.get("paused"):
+        return f"Quiet - measuring, no pop-ups ({duration(snap['quiet_for_s'])} left)"
     if snap.get("paused"):
         until = snap.get("paused_for_s")
         return "Paused - camera off" + (f" ({duration(until)} left)" if until else "")
@@ -103,21 +109,28 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
     else:
         items.append(Item(text="Take a 20-second eye break", action="break_now",
                           enabled=not snap.get("paused")))
+    if snap.get("quiet_for_s"):
+        items.append(Item(text=f"End quiet time ({duration(snap['quiet_for_s'])} left)",
+                          action="quiet:0"))
+    elif not snap.get("paused"):
+        items.append(Item(text="Quiet for 1 hour (keep measuring)", action="quiet:60"))
     if snap.get("paused"):
         items.append(Item(text="Resume", action="resume"))
     else:
-        items.append(Item(text="Pause", submenu=[
+        items.append(Item(text="Pause camera", submenu=[
             Item(text="For 30 minutes", action="pause:30"),
             Item(text="For 1 hour", action="pause:60"),
             Item(text="Until I resume", action="pause:0"),
         ]))
     items.append(Item.sep())
+    preset = snap.get("preset", "balanced")
+    items.append(Item(text="Coaching style", submenu=[
+        Item(text=label, action=f"preset:{key}", checked=(preset == key))
+        for key, label in STYLE_CHOICES] + ([Item.line("Custom (set in the dashboard)")]
+                                            if preset == "custom" else [])))
     items.append(Item(text="Open dashboard...", action="dashboard"))
     poor = (snap.get("quality") or {}).get("level") == "poor"
     items.append(Item(text="Fix camera setup..." if poor else "Check camera setup...", action="setup"))
-    items.append(Item(text="Blink reminder", submenu=[
-        Item(text=label, action=f"cue:{key}", checked=(blink_cue == key))
-        for key, label in cue_choices]))
     if autostart is not None:
         items.append(Item(text="Start at login", action="autostart", checked=autostart))
     items.append(Item.sep())

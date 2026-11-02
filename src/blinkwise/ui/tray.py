@@ -51,7 +51,10 @@ def mac_dark_mode() -> bool:
 
 class Tray:
     def __init__(self, get_snapshot: Callable[[], Dict[str, Any]],
-                 on_action: Callable[[str], None], get_cue: Callable[[], str]):
+                 on_action: Callable[[str], None], get_cue: Callable[[], str],
+                 dispatch: Optional[Callable[[Callable[[], None]], None]] = None):
+        """`dispatch` runs a callable on the UI thread (the Tk pump); when None, updates
+        are applied directly (Windows/Linux) or via AppHelper (macOS without Tk)."""
         import pystray
 
         self._pystray = pystray
@@ -66,8 +69,16 @@ class Tray:
         self._state: tuple = ("watching", False)
         self._blinking = False
         self._stop = threading.Event()
+        self._dispatch = dispatch
+        kwargs = {}
+        if IS_MAC and dispatch is not None:
+            try:   # attach to the NSApplication Tk already created (Tk runs its event loop)
+                from AppKit import NSApplication
+                kwargs["darwin_nsapplication"] = NSApplication.sharedApplication()
+            except Exception:
+                pass
         self.icon = pystray.Icon("blinkwise", self._image(self._state), "Blinkwise",
-                                 menu=self._menu())
+                                 menu=self._menu(), **kwargs)
 
     # ------------------------------------------------------------ lifecycle
     def run_blocking(self, setup: Optional[Callable[[], None]] = None) -> None:
@@ -80,6 +91,15 @@ class Tray:
             if setup:
                 setup()
         self.icon.run(setup=_setup)
+
+    def attach(self) -> None:
+        """macOS with Tk: register the status item on Tk's app loop (call before mainloop)."""
+        def _setup(icon):
+            icon.visible = True
+            self._main(self._hide_dock_icon)
+            self._main(self._make_template)
+        self.icon.run_detached(setup=_setup)
+        threading.Thread(target=self._refresh_loop, name="tray-refresh", daemon=True).start()
 
     def start_background(self) -> None:
         """Run in a worker thread (Windows/Linux)."""
@@ -193,6 +213,9 @@ class Tray:
 
     # --- macOS specifics (best effort; harmless elsewhere) --------------------
     def _main(self, fn: Callable[[], None]) -> None:
+        if self._dispatch is not None:
+            self._dispatch(fn)
+            return
         if IS_MAC:
             try:
                 from PyObjCTools import AppHelper

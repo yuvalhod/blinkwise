@@ -19,6 +19,7 @@ from ..vision.features import FrameFeatures
 from ..vision.quality import Quality, assess
 from .breaks import BreakScheduler
 from .coach import Coach, CoachContext
+from .engagement import LADDER, Escalator
 from .events import BlinkEvent, BreakDue, BreakEnded, MinuteSummary, StareCue, Suggestion
 from .metrics import RollingStats
 
@@ -72,6 +73,8 @@ class Engine:
         self._down_now = False
         self._down_since: Optional[float] = None
         self._stare20_counted = False
+        self.escalator = Escalator(start=self.s.blink_cue if self.s.blink_cue in LADDER else "subtle")
+        self._last_esc_tick = -1e9
         self._p80_run = 0.0          # current >=80%-closed run (pending until the eyes reopen)
         self._last_coach_t = -1e9
         self._screen_s = 0.0
@@ -125,7 +128,8 @@ class Engine:
                 and not unconfirmed_dip \
                 and t - self._last_cue_t >= self.s.stare_seconds and self.s.blink_cue != "off":
             self._last_cue_t = t
-            out.append(StareCue(stare))
+            self.escalator.on_cue(t)
+            out.append(StareCue(stare, self.cue_style))
 
         # Eyes closed for a while = resting, which counts toward breaks.
         o = self.detector.openness
@@ -142,6 +146,10 @@ class Engine:
                 self.break_due = None
 
         self._track_recent(t, f, attending)
+        if t - self._last_esc_tick >= 1.0:
+            self._last_esc_tick = t
+            if self.s.adaptive_cues and self.s.blink_cue in LADDER:
+                self.escalator.tick(t)
         self._track_activity(t, dt, f, attending)
         out.extend(self._roll_minute(t, dt, attending, stare, eyes_usable))
 
@@ -152,8 +160,17 @@ class Engine:
                 out.append(sug)
         return out
 
+    @property
+    def cue_style(self) -> str:
+        """The stare cue to show now: the configured one, or the adaptive level."""
+        if self.s.adaptive_cues and self.s.blink_cue in LADDER:
+            return self.escalator.cue
+        return self.s.blink_cue
+
     def apply_settings(self) -> None:
         """Pick up changed settings (the Settings object is shared; schedulers copy values)."""
+        if self.s.blink_cue in LADDER:
+            self.escalator = Escalator(start=self.s.blink_cue)
         b = self.breaks
         b.micro_s = self.s.micro_break_minutes * 60
         b.micro_len = self.s.micro_break_seconds
@@ -196,6 +213,8 @@ class Engine:
             "completeness_available": self.detector.fps >= self.detector.p.min_fps_for_completeness,
             "long_blinks_per_min_10m": _r(s10.long_per_min, 2),
             "perclos_5m": _r(s5.perclos, 3),
+            "cue_style": self.cue_style,
+            "cue_response_rate": _r(self.escalator.responses.rate(), 2),
             "target_blink_rate": list(RELAXED_BLINK_RATE),
             "distance_cm": _r(dist, 0),
             "head_pitch": _r(pitch), "head_yaw": _r(f.yaw if f and f.face else None),
@@ -244,6 +263,7 @@ class Engine:
         self.attention.add_blink()
         self._last_blink_t = max(self._last_blink_t or b.end, b.end)
         self._stare20_counted = False
+        self.escalator.on_blink(b.t)
         if self._minute is not None:
             self._minute.blinks += 1
             if self._down_now:
