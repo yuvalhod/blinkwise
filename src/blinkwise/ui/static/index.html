@@ -179,7 +179,7 @@ footer{margin-top:20px;color:var(--faint);font-size:12px;display:flex;gap:8px;al
     </section>
 
     <section class="card c7" aria-label="Screen time">
-      <p class="label">Screen time today <span class="info" title="Time your eyes were actually on your computer screens, measured by the camera. Phone: time looking down at another device. Both at once: minutes you switched back and forth between them.">i</span></p>
+      <p class="label">Screen time today <span class="info" title="Screen: time your eyes were on your computer. Phone: time looking down at another device. Switching: minutes in which you went back and forth between the two. It overlaps with the other two; it isn't extra time.">i</span></p>
       <div class="st-head"><span class="st-total num" id="stTotal">--</span><span class="st-sub" id="stSub"></span></div>
       <div class="split" id="split"></div>
       <div class="legend" id="stLegend"></div>
@@ -319,10 +319,11 @@ function renderScreenTime(t){
   $("stTotal").textContent = scr ? hm(scr) : "--";
   $("stSub").textContent = scr ? "eyes on screen" : "counts while you're at your screen";
   const total = scr + ph;
-  $("split").innerHTML = total ? `<span style="width:${(scr-both)/total*100}%;background:var(--accent)"></span><span style="width:${both/total*100}%;background:var(--both)"></span><span style="width:${ph/total*100}%;background:var(--phone)"></span>` : "";
+  // The bar shows real time only (screen vs phone). Switching overlaps both, so it's not a slice.
+  $("split").innerHTML = total ? `<span style="width:${scr/total*100}%;background:var(--accent)"></span><span style="width:${ph/total*100}%;background:var(--phone)"></span>` : "";
   $("stLegend").innerHTML = `<span><i style="background:var(--accent)"></i>Screen<b class="num">${hm(scr)}</b></span>
     <span><i style="background:var(--phone)"></i>Phone<b class="num">${hm(ph)}</b></span>
-    <span title="Minutes when you switched between your computer and another device"><i style="background:var(--both)"></i>Both at once<b class="num">${hm(both)}</b></span>`;
+    <span title="Minutes in which you went back and forth between computer and phone. Overlaps with the times above; not extra time."><i style="background:var(--both)"></i>Switching<b class="num">${hm(both)}</b></span>`;
 }
 
 function renderTimeline(mins){
@@ -332,7 +333,7 @@ function renderTimeline(mins){
   const start = Math.max(t0, Math.floor(Math.min(...rows.map(r => r.ts))/3600)*3600);
   const end = Math.max(start + 4*3600, now.getTime()/1000), W = 1000, H = 34, span = end - start;
   const X = ts => (ts - start)/span*W, w = Math.max(1.5, 60/span*W);
-  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Today's timeline: screen, phone and both"><rect x="0" y="4" width="${W}" height="26" rx="6" fill="${css("--track")}"/>`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Today's timeline: screen, phone and switching"><rect x="0" y="4" width="${W}" height="26" rx="6" fill="${css("--track")}"/>`;
   for (const m of rows){
     const both = m.screen_s >= 5 && m.down_s >= 5;
     const col = both ? css("--both") : m.down_s >= 20 ? css("--phone") : m.screen_s >= 10 ? css("--accent") : null;

@@ -52,7 +52,8 @@ def test_menu_reads_in_plain_words():
     assert "Last blink: 4 s ago" in text
     assert "Next eye break: in 12 min" in text
     assert "Screen time today: 3 h 20 min" in text
-    assert "Phone: 35 min (22 min both at once)" in text
+    assert "Phone time today: 35 min" in text
+    assert "Switching laptop and phone: 22 min" in text
     assert "Take a 20-second eye break" in text and "Pause camera >" in text
     assert "Quiet for 1 hour" in text
     assert "  (x) Balanced" in text and "  ( ) Coach" in text

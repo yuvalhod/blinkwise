@@ -99,9 +99,9 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
     if today.get("screen_minutes"):
         items.append(Item.line(f"Screen time today: {duration(today['screen_minutes'] * 60)}"))
         if today.get("device_minutes", 0) >= 1:
-            items.append(Item.line(f"Phone: {duration(today['device_minutes'] * 60)}"
-                                   + (f" ({today['multitask_minutes']} min both at once)"
-                                      if today.get("multitask_minutes") else "")))
+            items.append(Item.line(f"Phone time today: {duration(today['device_minutes'] * 60)}"))
+        if today.get("multitask_minutes"):
+            items.append(Item.line(f"Switching laptop and phone: {today['multitask_minutes']} min"))
     items.append(Item.sep())
 
     if snap.get("break_active"):

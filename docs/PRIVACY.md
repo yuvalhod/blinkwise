@@ -22,7 +22,7 @@ because a feature reads it:
 | Longest stare, count of 20 s+ stares | stare insights |
 | Median viewing distance (cm) | "too close" tip, leaning-in pattern |
 | Number of screens in use | multi-screen insight |
-| Seconds on your computer screen / looking down at another device, switches | screen time, phone time, "both at once" |
+| Seconds on your computer screen / looking down at another device, switches | screen time, phone time, switching between them |
 | Minutes of continuous use | your blink-drop pattern and break interval |
 
 Plus: break outcomes (taken / skipped), your settings, and two marker files (first-run
