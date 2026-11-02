@@ -59,7 +59,7 @@ Parameters were chosen on the labelled video and simulations, and sit on a wide 
 
 ## Menu bar
 
-`ui/icon.py` draws the icon procedurally: a closed eye with lashes, plus open and half frames for the blink animation. It renders black + alpha so macOS can use it as a template image. `ui/menu.py` builds the dropdown as plain data, and `ui/tray.py` renders it with pystray. On macOS the tray owns the main thread and updates are marshalled with `AppHelper.callAfter`; elsewhere it runs in a background thread next to Tk. `scripts/render_menubar_mock.py` renders a design mock-up from the same code.
+`ui/icon.py` draws the icon procedurally: an open eye while watching, a closed eye with lashes when paused, and a half-closed frame for the blink animation. It renders black + alpha so macOS can use it as a template image. `ui/menu.py` builds the dropdown as plain data, and `ui/tray.py` renders it with pystray. On macOS the tray owns the main thread and updates are marshalled with `AppHelper.callAfter`; elsewhere it runs in a background thread next to Tk. `scripts/render_menubar_mock.py` renders a design mock-up from the same code.
 
 ## Adding a coaching rule
 

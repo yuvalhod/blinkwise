@@ -66,7 +66,7 @@ class Tray:
         if sys.platform.startswith("linux"):
             self._color = (230, 230, 230, 255)    # most Linux panels are dark
         self._cache: Dict[tuple, Any] = {}
-        self._state: tuple = ("watching", False)
+        self._state: tuple = ("open", False)
         self._blinking = False
         self._stop = threading.Event()
         self._dispatch = dispatch

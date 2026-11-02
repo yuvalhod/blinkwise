@@ -4,7 +4,7 @@
 
 Everything runs locally. No images are stored or sent anywhere.
 
-It lives in your menu bar as a closed eye with lashes. Click it to see how you're doing and to take a break, pause or open the dashboard.
+It lives in your menu bar as an eye with lashes: open while it's watching, closed when it's off. Click it to see how you're doing and to take a break, pause or open the dashboard.
 
 ![Menu bar](docs/img/menubar.png)
 
@@ -24,7 +24,7 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 | **Multi-screen awareness** | Learns how many screens you *actually use* from your head pose. It shows the time split, how often you switch, how far you turn your head, and whether you blink less on one screen than another. |
 | **Posture and environment** | Estimates viewing distance from your iris size (about 11.7 mm in almost everyone), plus head tilt (a screen that's too high) and room lighting. |
 | **Coaching** | A handful of rules, each with a cooldown, a global anti-nag limit, and links to the research behind it. |
-| **Menu bar** | A closed eye with lashes. A dot means a break is due, a slash means paused (camera off), and when you've stared too long the eye blinks at you. Click it for today's status and a few actions: take a break, pause for 30 min or 1 h, open the dashboard, choose how you're reminded, start at login. |
+| **Menu bar** | An eye with lashes: open while Blinkwise is watching, closed when the camera is off. A dot means a break is due, and when you've stared too long the eye blinks at you. Click it for today's status and a few actions: take a break, pause for 30 min or 1 h, open the dashboard, choose how you're reminded, start at login. |
 | **Tracking quality** | Grades frame rate, face size, lighting and jitter. When it can't see your eyes reliably it says so and pauses blink advice rather than give you wrong numbers. |
 | **Drowsiness** | PERCLOS (share of time the eyes are mostly closed), the standard camera measure of drowsiness. |
 | **Self-test** | `blinkwise selftest` checks in 30 seconds that detection works on *your* face and camera. |

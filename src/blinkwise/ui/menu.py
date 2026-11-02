@@ -141,7 +141,7 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
 def icon_state(snap: Dict[str, Any]) -> tuple:
     """(state, badge) for ui.icon.render."""
     if snap.get("paused"):
-        return "paused", False
+        return "closed", False                 # camera off: eye closed
     if not snap.get("face"):
         return "away", bool(snap.get("break_active"))
-    return "watching", bool(snap.get("break_active"))
+    return "open", bool(snap.get("break_active"))   # watching: eye open

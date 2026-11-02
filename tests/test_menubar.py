@@ -25,13 +25,13 @@ def test_icon_renders_as_template_image(state, size):
 def test_icon_states_are_distinguishable():
     imgs = {s: render(s, 44).tobytes() for s in STATES}
     assert len(set(imgs.values())) == len(STATES)
-    assert render("watching", 44, badge=True).tobytes() != imgs["watching"]
+    assert render("open", 44, badge=True).tobytes() != imgs["open"]
     assert len(blink_animation()) >= 4
 
 
 def test_closed_eye_has_lashes_below_the_lid():
     """The closed eye: ink in the lower part of the icon (lashes hang below the lid)."""
-    img = render("watching", 64)
+    img = render("closed", 64)
     alpha = img.getchannel("A")
     w, h = img.size
     lower = sum(alpha.getpixel((x, y)) > 0 for x in range(w) for y in range(int(h * 0.55), h))
@@ -73,9 +73,9 @@ def test_menu_when_paused_and_during_break():
 def test_menu_flags_poor_tracking_and_icon_states():
     poor = flatten(build_menu({**SNAP, "quality": {"level": "poor"}}, blink_cue="off", autostart=None))
     assert poor[0] == "Blinkwise: Can't see your eyes clearly"
-    assert icon_state(SNAP) == ("watching", False)
-    assert icon_state({**SNAP, "break_active": "micro"}) == ("watching", True)
-    assert icon_state({**SNAP, "paused": True}) == ("paused", False)
+    assert icon_state(SNAP) == ("open", False)                       # on: eye open
+    assert icon_state({**SNAP, "break_active": "micro"}) == ("open", True)
+    assert icon_state({**SNAP, "paused": True}) == ("closed", False)  # off: eye closed
     assert icon_state({**SNAP, "face": False}) == ("away", False)
     assert rate_word(None) == "measuring..." and rate_word(17) == "17 a minute, healthy"
 

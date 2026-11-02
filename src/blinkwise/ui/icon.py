@@ -1,17 +1,16 @@
-"""The menu-bar / system-tray icon: a closed eye with eyelashes.
+"""The menu-bar / system-tray icon: an eye with eyelashes.
 
 Drawn procedurally (no image assets) so it's crisp at every size and can be
 re-coloured. On macOS it's used as a *template* image: pure black + alpha, and
 the system tints it for light/dark menu bars and the highlighted state.
 
 States
-  watching  closed eye with lashes (the brand mark: "rest your eyes")
-  open      open eye (used as frames of the blink animation)
-  half      half-closed eye (blink animation)
-  paused    closed eye with a slash (camera is off)
-  away      closed eye, faded (nobody in front of the camera)
+  open      open eye: Blinkwise is on and watching
+  closed    closed eye with lashes: camera off (paused)
+  away      open eye, faded: on, but nobody is in front of the camera
+  half      half-closed eye: only used mid-blink in the stare-cue animation
 Badge
-  a small dot at the top-right when a break is due
+  a small dot at the bottom-right when a break is due
 """
 
 from __future__ import annotations
@@ -19,13 +18,13 @@ from __future__ import annotations
 import math
 from typing import List, Tuple
 
-STATES = ("watching", "open", "half", "paused", "away")
-BLINK_FRAMES = ("half", "open", "open", "half", "watching")   # played as the stare cue
+STATES = ("open", "closed", "away", "half")
+BLINK_FRAMES = ("half", "closed", "closed", "half", "open")   # the stare cue: the eye blinks
 
 Color = Tuple[int, int, int, int]
 
 
-def render(state: str = "watching", size: int = 44, color: Color = (0, 0, 0, 255),
+def render(state: str = "open", size: int = 44, color: Color = (0, 0, 0, 255),
            badge: bool = False):
     """Return a PIL RGBA image of the icon. `size` is the square pixel size
     (44 = macOS menu bar @2x; 22 @1x; 16/32 for Windows/Linux trays)."""
@@ -45,7 +44,7 @@ def render(state: str = "watching", size: int = 44, color: Color = (0, 0, 0, 255
     rx = S * 0.44                           # half width of the eye
     cx = S / 2
 
-    if state in ("watching", "paused", "away"):
+    if state == "closed":
         sag, lash = S * 0.18, S * 0.17
         cy = S / 2 - (sag + lash) / 2       # centre lid + lashes vertically
         _poly(d, _arc_points(cx, cy, rx, sag), c, lw)
@@ -55,21 +54,16 @@ def render(state: str = "watching", size: int = 44, color: Color = (0, 0, 0, 255
         cy = S / 2 - lash / 2
         _open_eye(d, cx, cy, rx, h, lw, c, pupil=False)
         _lashes(d, cx, cy + h, rx, lash, lw, c, up=False, curve=h, n=n_lashes)
-    else:  # open
+    else:  # open / away
         h, lash = S * 0.20, S * 0.14
         cy = S / 2 + lash / 2
         _open_eye(d, cx, cy, rx, h, lw, c, pupil=True)
         _lashes(d, cx, cy - h, rx, lash, lw, c, up=True, curve=h, n=n_lashes)
 
-    if state == "paused":
-        # Slash with a transparent "cut" alongside it so it separates from the lid.
-        a, b = (S * 0.16, S * 0.86), (S * 0.86, S * 0.16)
-        nx, ny = lw * 0.9, lw * 0.9            # offset toward the upper-left
-        d.line([(a[0] - nx, a[1] - ny), (b[0] - nx, b[1] - ny)], fill=(0, 0, 0, 0), width=lw * 2)
-        d.line([a, b], fill=c, width=lw)
     if badge:
         r = S * (0.15 if small else 0.13)
-        bx, by = S - r - S * 0.01, r + S * 0.01
+        # Bottom-right: the open eye's lashes point up, so the top corner is taken.
+        bx, by = S - r - S * 0.01, S - r - S * 0.01
         d.ellipse([bx - r - lw, by - r - lw, bx + r + lw, by + r + lw], fill=(0, 0, 0, 0))
         d.ellipse([bx - r, by - r, bx + r, by + r], fill=c)
     return img.resize((size, size), Image.LANCZOS)
@@ -136,7 +130,7 @@ def app_icon(size: int = 1024):
     mask = Image.new("L", (S, S), 0)
     ImageDraw.Draw(mask).rounded_rectangle(box, radius=(S - 2 * m) * 0.225, fill=255)
     img.paste(grad, (0, 0), mask)
-    glyph = render("watching", int(S * 0.62), (255, 255, 255, 255))
+    glyph = render("closed", int(S * 0.62), (255, 255, 255, 255))   # brand mark: rest your eyes
     gx = (S - glyph.width) // 2
     gy = int((S - glyph.height) / 2 + S * 0.02)
     img.alpha_composite(glyph, (gx, gy))

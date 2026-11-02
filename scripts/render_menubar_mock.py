@@ -28,7 +28,7 @@ SCENES = [
         running=True, face=True, paused=False, preset="coach", blink_rate_5m=9.0,
         seconds_since_blink=3, next_break_s=900, quiet_for_s=2400, quality={"level": "good"},
         today=TODAY), False),
-    ("Paused - camera off, slash on the icon", dict(
+    ("Paused - camera off, eye closed", dict(
         running=True, face=False, paused=True, paused_for_s=1520, preset="balanced", today=TODAY), False),
 ]
 
