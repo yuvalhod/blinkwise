@@ -69,6 +69,18 @@ th{color:var(--muted);font-weight:500}
 .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:14px}
 .kv div:nth-child(odd){color:var(--muted)}
 .empty{color:var(--muted);font-size:14px;padding:8px 0}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+@media (max-width:700px){.presets{grid-template-columns:1fr}}
+.preset{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card);color:var(--ink);text-align:left;cursor:pointer}
+.preset.sel{border-color:var(--accent);background:var(--accent-soft)}
+.preset b{display:block;margin-bottom:2px}
+.preset small{color:var(--muted);font-size:13px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 18px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.field span{color:var(--muted);font-size:12px}
+.field select,.field input[type=number],.field input[type=time]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+.field.check{flex-direction:row;align-items:center;gap:8px}
+
 .banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:14px}
 .banner strong{color:inherit}
 footer{margin-top:22px;color:var(--muted);font-size:12px}
@@ -149,6 +161,13 @@ footer a{color:var(--accent)}
     <section class="card c12">
       <h2>Last 14 days</h2>
       <div class="tablewrap" id="days"><div class="empty">No history yet.</div></div>
+    </section>
+
+    <section class="card c12" id="settings">
+      <h2>Settings</h2>
+      <div class="presets" id="presets"></div>
+      <div class="form" id="form"></div>
+      <p class="sub" id="saved" aria-live="polite"></p>
     </section>
 
     <section class="card c12">
@@ -395,6 +414,61 @@ async function refreshPatterns(){
   try { renderPatterns(await (await fetch("/api/insights?days=14")).json()); } catch(e){}
 }
 
+const PRESETS = [
+  ["gentle", "Gentle", "Menu-bar blink only, quiet break notifications every 30 min."],
+  ["balanced", "Balanced", "Small on-screen eye, break card every 20 min, important tips."],
+  ["coach", "Coach", "Big Blink prompt, full-screen breaks with a countdown, all tips."]];
+const FIELDS = [
+  ["blink_cue", "Blink reminder", "select", [["menubar","Blink the menu bar icon"],["subtle","Small eye on screen"],["big","Big centred Blink prompt"],["notify","Notification"],["off","Off"]]],
+  ["adaptive_cues", "Adapt the reminder to whether I respond", "check"],
+  ["stare_seconds", "Remind me after this many seconds without blinking", "number", [4, 60, 1]],
+  ["break_style", "Eye breaks", "select", [["notify","Notification only"],["gentle","Small card with countdown"],["immersive","Full screen with countdown"]]],
+  ["micro_break_minutes", "Eye break every (minutes of screen time)", "number", [5, 120, 5]],
+  ["long_break_minutes", "Long break every (minutes)", "number", [20, 240, 10]],
+  ["skip_delay_s", "Full-screen break: Skip appears after (seconds)", "number", [0, 20, 1]],
+  ["notify_suggestions", "Tips as notifications", "select", [["none","None (dashboard only)"],["important","Important only"],["all","All"]]],
+  ["daily_summary", "End-of-day summary at", "time"],
+  ["profile", "Profile", "select", [["adult","Adult"],["young","Child / teen (adds outdoor-time tips)"]]],
+  ["store_history", "Keep history on this computer", "check"]];
+
+function renderSettings(st){
+  $("presets").innerHTML = PRESETS.map(([k,t,d]) => `<button class="preset ${st.preset===k?"sel":""}" data-p="${k}"><b>${t}</b><small>${d}</small></button>`).join("")
+    + (st.preset === "custom" ? `<p class="sub" style="grid-column:1/-1;margin:0">Custom: you've adjusted the details below.</p>` : "");
+  $("form").innerHTML = FIELDS.map(([k,label,type,opt]) => {
+    const v = st[k];
+    if (type === "select") return `<label class="field"><span>${label}</span><select data-k="${k}">${opt.map(([ov,ol]) => `<option value="${ov}" ${ov===v?"selected":""}>${ol}</option>`).join("")}</select></label>`;
+    if (type === "check") return `<label class="field check"><input type="checkbox" data-k="${k}" ${v?"checked":""}> ${label}</label>`;
+    if (type === "time") return `<label class="field"><span>${label}</span><input type="time" data-k="${k}" value="${esc(v||"")}"></label>`;
+    return `<label class="field"><span>${label}</span><input type="number" data-k="${k}" min="${opt[0]}" max="${opt[1]}" step="${opt[2]}" value="${v}"></label>`;
+  }).join("");
+  document.querySelectorAll(".preset").forEach(b => b.onclick = () => saveSettings({preset: b.dataset.p}));
+  document.querySelectorAll("#form [data-k]").forEach(el => el.onchange = () => {
+    const k = el.dataset.k;
+    const v = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
+    saveSettings({[k]: v});
+  });
+}
+
+let savedTimer = null;
+async function saveSettings(change){
+  clearTimeout(savedTimer);
+  const r = await fetch("/api/settings", {method:"POST", headers:{"Content-Type":"application/json","X-Blinkwise-Token":TOKEN}, body: JSON.stringify(change)});
+  const body = await r.json();
+  if (!r.ok){
+    await loadSettings();                       // restore the saved value in the form
+    $("saved").innerHTML = `<span class="warn">Not saved: ${esc(body.error || r.status)}</span>`;
+    return;
+  }
+  renderSettings(body);
+  $("saved").textContent = "Saved.";
+  savedTimer = setTimeout(() => $("saved").textContent = "", 1500);
+}
+
+async function loadSettings(){
+  try { const st = await (await fetch("/api/settings")).json(); if (st.preset) renderSettings(st); } catch(e){}
+}
+
+loadSettings();
 refreshHistory();
 refreshPatterns();
 setInterval(refreshPatterns, 300000);

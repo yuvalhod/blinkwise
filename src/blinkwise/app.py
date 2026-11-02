@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .config import Settings, data_dir
+from .core import summary
 from .core.engine import Engine
 from .core.events import BreakDue, BreakEnded, StareCue, Suggestion
 from .core.storage import History
@@ -60,6 +61,7 @@ class App:
         self.tray = None
         self._paused_until: Optional[float] = None    # monotonic time to auto-resume
         self._quiet_until: Optional[float] = None     # monotonic time quiet mode ends
+        self._summary_check = 0.0
         self._today: Dict[str, Any] = {}
         self._today_at = 0.0
 
@@ -225,6 +227,27 @@ class App:
                     b.since_micro = b.micro_interval(False)  # due on the next tick
                     b.snoozed_until = -1e9
 
+    def _check_daily_summary(self) -> None:
+        """Called about once a minute from the UI loop."""
+        if self.history is None or self.demo or time.monotonic() - self._summary_check < 60:
+            return
+        self._summary_check = time.monotonic()
+        marker = data_dir() / ".last_summary"
+        last = marker.read_text().strip() if marker.exists() else None
+        if not summary.due(self.s.daily_summary, last):
+            return
+        from .core.analytics import insights
+        try:
+            msg = summary.build(self.history.daily(14),
+                                insights=[i.__dict__ for i in insights(self.history.minute_rows(14))])
+        except Exception:
+            log.exception("daily summary failed")
+            return
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(time.strftime("%Y-%m-%d"))
+        if msg and not self.quiet:
+            native.notify(*msg)
+
     def _today_stats(self) -> Dict[str, Any]:
         if self.history is None or time.monotonic() - self._today_at < 60:
             return self._today
@@ -356,6 +379,7 @@ class App:
                 except queue.Empty:
                     break
                 self._handle_ui_event(ev, cue, card, toast)
+            self._check_daily_summary()
             root.after(50, pump)
 
         root.after(50, pump)
@@ -427,6 +451,7 @@ class App:
         if not quiet:
             print("Blinkwise is running (no on-screen overlay). Press Ctrl+C to quit.")
         while not self.stop.is_set():
+            self._check_daily_summary()
             try:
                 ev = self.events.get(timeout=0.5)
             except queue.Empty:
