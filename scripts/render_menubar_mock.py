@@ -16,18 +16,20 @@ import sys
 from blinkwise.ui.icon import render
 from blinkwise.ui.menu import build_menu, icon_state
 
+TODAY = {"screen_minutes": 263, "device_minutes": 38, "multitask_minutes": 21, "breaks_taken": 5}
 SCENES = [
-    ("Mid-afternoon, blinking too little", dict(
-        running=True, face=True, paused=False, blink_rate_5m=7.2, seconds_since_blink=9,
-        next_break_s=440, quality={"level": "good"},
-        today={"screen_minutes": 263, "breaks_taken": 5})),
-    ("Eye break due (dot on the icon)", dict(
-        running=True, face=True, paused=False, blink_rate_5m=11.4, seconds_since_blink=2,
-        break_active="micro", quality={"level": "good"},
-        today={"screen_minutes": 281, "breaks_taken": 5})),
-    ("Paused (camera off)", dict(
-        running=True, face=False, paused=True, paused_for_s=1520,
-        today={"screen_minutes": 300, "breaks_taken": 6})),
+    ("Working - blinking too little", dict(
+        running=True, face=True, paused=False, preset="balanced", blink_rate_5m=7.2,
+        seconds_since_blink=9, next_break_s=440, quality={"level": "good"}, today=TODAY), True),
+    ("Eye break due - dot on the icon", dict(
+        running=True, face=True, paused=False, preset="balanced", blink_rate_5m=11.4,
+        seconds_since_blink=2, break_active="micro", quality={"level": "good"}, today=TODAY), False),
+    ("Quiet for a meeting - still measuring", dict(
+        running=True, face=True, paused=False, preset="coach", blink_rate_5m=9.0,
+        seconds_since_blink=3, next_break_s=900, quiet_for_s=2400, quality={"level": "good"},
+        today=TODAY), False),
+    ("Paused - camera off, slash on the icon", dict(
+        running=True, face=False, paused=True, paused_for_s=1520, preset="balanced", today=TODAY), False),
 ]
 
 
@@ -56,12 +58,19 @@ def menu_html(items, sub=False):
     return "".join(out)
 
 
-def scene_html(title, snap, dark):
+def scene_html(title, snap, dark, open_sub=False):
     state, badge = icon_state(snap)
     items = build_menu(snap, blink_cue="menubar", autostart=True)
-    sub = next((i for i in items if i.text == "Blink reminder"), None)
-    sub_html = f'<div class="menu submenu">{menu_html(sub.submenu, True)}</div>' if (
-        sub and "Paused" not in title and "break" not in title) else ""
+    sub_html = ""
+    if open_sub:
+        top = 35
+        for it in items:
+            if it.text == "Coaching style":
+                break
+            top += 11 if it.separator else 22
+        sub = next(i for i in items if i.text == "Coaching style")
+        sub_html = (f'<div class="menu submenu" style="margin-top:{top - 35}px">'
+                    f'{menu_html(sub.submenu, True)}</div>')
     return f"""
 <figure class="scene {'dark' if dark else 'light'}">
   <div class="desktop">
@@ -70,10 +79,10 @@ def scene_html(title, snap, dark):
       <span class="right">
         <span class="other">&#9679;&#9679;</span>
         <span class="mine"><img src="{icon_data_uri(state, badge, dark)}" width="22" height="22" alt=""></span>
-        <span class="other">&#9685;</span><span class="clock">3:56 PM</span>
+        <span class="other">&#9685;</span><span class="clock">3:56</span>
       </span>
     </div>
-    <div class="menu main">{menu_html(items)}</div>{sub_html}
+    <div class="menus"><div class="menu main">{menu_html(items)}</div>{sub_html}</div>
   </div>
   <figcaption>{html.escape(title)} &middot; {'dark' if dark else 'light'} menu bar</figcaption>
 </figure>"""
@@ -90,7 +99,7 @@ h1{font-size:20px;margin:0 0 4px} p.sub{color:var(--muted);margin:0 0 20px}
 @media (max-width:1100px){.grid{grid-template-columns:1fr}}
 figure{overflow-x:auto}
 figure{margin:0} figcaption{color:var(--muted);font-size:12px;margin-top:6px}
-.desktop{position:relative;height:430px;min-width:600px;border-radius:12px;overflow:hidden;
+.desktop{position:relative;height:440px;min-width:600px;border-radius:12px;overflow:hidden;
   background:linear-gradient(160deg,#9fb6d8,#c9b6d9 60%,#e6c7b8)}
 .dark .desktop{background:linear-gradient(160deg,#1d2b45,#3a2d4f 60%,#4a3530)}
 .bar{height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;
@@ -105,8 +114,11 @@ figure{margin:0} figcaption{color:var(--muted);font-size:12px;margin-top:6px}
   background:rgba(240,240,240,.86);backdrop-filter:blur(30px);
   box-shadow:0 0 0 .5px rgba(0,0,0,.25),0 10px 30px rgba(0,0,0,.25)}
 .dark .menu{background:rgba(40,40,42,.88);color:#f2f2f2;box-shadow:0 0 0 .5px rgba(255,255,255,.18),0 10px 30px rgba(0,0,0,.5)}
-.main{top:30px;left:120px}
-.submenu{top:226px;left:398px;min-width:200px}
+/* Near the screen edge macOS opens submenus to the left, as here. */
+.menus{position:absolute;top:30px;right:84px;display:flex;align-items:flex-start;flex-direction:row-reverse}
+.menus .menu{position:relative}
+.main{min-width:290px}
+.submenu{min-width:150px;margin-right:-4px;z-index:1}
 .item{display:flex;align-items:center;height:22px;padding:0 10px 0 4px;border-radius:5px;white-space:nowrap}
 .item .check{width:16px;text-align:center;font-size:11px}
 .item .label{flex:1}
@@ -124,7 +136,7 @@ figure{margin:0} figcaption{color:var(--muted);font-size:12px;margin-top:6px}
 
 def main() -> int:
     out = sys.argv[1] if len(sys.argv) > 1 else "menubar_mock.html"
-    scenes = "".join(scene_html(t, s, dark) for dark in (False, True) for t, s in SCENES)
+    scenes = "".join(scene_html(t, s, dark, sub) for dark in (True, False) for t, s, sub in SCENES)
     doc = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Blinkwise Menu Bar</title>
 <style>{CSS}</style></head><body><div class="wrap">

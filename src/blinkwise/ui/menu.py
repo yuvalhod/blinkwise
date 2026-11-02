@@ -35,9 +35,7 @@ class Item:
         return Item(text=text, enabled=False, info=True)
 
 
-STYLE_CHOICES = (("gentle", "Gentle - menu bar only"),
-                 ("balanced", "Balanced"),
-                 ("coach", "Coach - big prompts, full-screen breaks"))
+STYLE_CHOICES = (("gentle", "Gentle"), ("balanced", "Balanced"), ("coach", "Coach"))
 
 CUE_CHOICES = (("menubar", "Blink the menu bar icon"),
                ("subtle", "Small eye on screen"),
@@ -69,7 +67,7 @@ def duration(seconds: float) -> str:
 
 def status_title(snap: Dict[str, Any]) -> str:
     if snap.get("quiet_for_s") and not snap.get("paused"):
-        return f"Quiet - measuring, no pop-ups ({duration(snap['quiet_for_s'])} left)"
+        return f"Quiet ({duration(snap['quiet_for_s'])} left)"
     if snap.get("paused"):
         until = snap.get("paused_for_s")
         return "Paused - camera off" + (f" ({duration(until)} left)" if until else "")
@@ -101,8 +99,8 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
     if today.get("screen_minutes"):
         items.append(Item.line(f"Screen time today: {duration(today['screen_minutes'] * 60)}"))
         if today.get("device_minutes", 0) >= 1:
-            items.append(Item.line(f"Phone / other device: {duration(today['device_minutes'] * 60)}"
-                                   + (f", {today['multitask_minutes']} min both at once"
+            items.append(Item.line(f"Phone: {duration(today['device_minutes'] * 60)}"
+                                   + (f" ({today['multitask_minutes']} min both at once)"
                                       if today.get("multitask_minutes") else "")))
     items.append(Item.sep())
 
@@ -115,7 +113,7 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
         items.append(Item(text=f"End quiet time ({duration(snap['quiet_for_s'])} left)",
                           action="quiet:0"))
     elif not snap.get("paused"):
-        items.append(Item(text="Quiet for 1 hour (keep measuring)", action="quiet:60"))
+        items.append(Item(text="Quiet for 1 hour", action="quiet:60"))
     if snap.get("paused"):
         items.append(Item(text="Resume", action="resume"))
     else:
@@ -128,7 +126,7 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
     preset = snap.get("preset", "balanced")
     items.append(Item(text="Coaching style", submenu=[
         Item(text=label, action=f"preset:{key}", checked=(preset == key))
-        for key, label in STYLE_CHOICES] + ([Item.line("Custom (set in the dashboard)")]
+        for key, label in STYLE_CHOICES] + ([Item.line("Custom")]
                                             if preset == "custom" else [])))
     items.append(Item(text="Open dashboard...", action="dashboard"))
     poor = (snap.get("quality") or {}).get("level") == "poor"
