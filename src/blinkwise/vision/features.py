@@ -30,3 +30,5 @@ class FrameFeatures:
     vis_right: Optional[float] = None     # per-eye iris contrast (eye visibility), see geometry
     vis_left: Optional[float] = None
     eye_yaw: Optional[float] = None       # eye-in-head horizontal gaze, degrees (diagnostic, coarse)
+    extrapolated: bool = False            # burst mode: camera resting, last pose carried forward
+                                          # (no eye data, so no blink statistics accrue)

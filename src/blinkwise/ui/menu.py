@@ -74,6 +74,8 @@ def status_title(snap: Dict[str, Any]) -> str:
     if snap.get("paused"):
         until = snap.get("paused_for_s")
         return "Paused - camera off" + (f" ({duration(until)} left)" if until else "")
+    if snap.get("camera_resting") and not snap.get("paused"):
+        return f"Camera resting (back in {duration(snap.get('camera_back_in_s') or 0)})"
     if snap.get("camera_error"):
         return "Camera unavailable - retrying"
     if not snap.get("running", True):

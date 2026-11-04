@@ -66,7 +66,9 @@ network access is the one-time model download. This is not legal advice.
 
 ## Camera control
 
-"Pause camera" in the dashboard releases the device, so your camera's light turns off. Quitting the app (Ctrl+C) releases it too. When nobody is in front of the camera for a minute, Blinkwise drops to 2 frames per second.
+"Pause camera" in the dashboard releases the device, so your camera's light turns off.
+With Settings > Camera > "1 min in every 5", Blinkwise releases the camera for four minutes
+out of every five, so the light is off most of the time. Quitting the app (Ctrl+C) releases it too. When nobody is in front of the camera for a minute, Blinkwise drops to 2 frames per second.
 
 ## Battery and video calls
 

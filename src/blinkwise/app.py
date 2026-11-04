@@ -34,6 +34,8 @@ IDLE_FPS = 2.0
 BATTERY_FPS = 12.0    # battery saver: half the CPU; blink completeness needs 20 fps so is skipped
 SYSTEM_POLL_S = 5.0   # how often to check battery and video calls
 CAMERA_RETRY_S = 5.0
+BURST_ON_S = 60.0     # burst sampling: camera on for 1 minute...
+BURST_OFF_S = 240.0   # ...then off for 4 (the light goes off); the last pose is carried forward
 
 
 class App:
@@ -76,6 +78,9 @@ class App:
         self.update_info: Optional[Dict[str, str]] = None
         self._updates = None
         self.calib = None                    # calibration.Session while one is running/unsaved
+        self._burst_anchor = time.monotonic()
+        self._carry = None                   # last real frame, for burst-mode carry-forward
+        self._carry_t = 0.0
 
     # ----------------------------------------------------------------- public
     def run(self) -> None:
@@ -174,7 +179,8 @@ class App:
                     if src is not None:
                         src.release()          # camera light goes off while paused / in a call
                         src = None
-                    self._drain_commands()
+                    if self.burst_resting() and not self.paused.is_set():
+                        self._step_carry()
                     self._publish()
                     time.sleep(0.2)
                     continue
@@ -202,6 +208,7 @@ class App:
                     continue
                 t, frame = item
                 f = tracker.process(frame, t)
+                self._carry = f
                 if f.face:
                     last_face = t
                 self._step(f)
@@ -247,6 +254,9 @@ class App:
                     update=self.update_info if self.s.check_updates else None,
                     calibration=self.calib.state() if self.calib is not None else None,
                     calibrated=bool(self.s.blink_overrides),
+                    camera_resting=self.burst_resting() and not self.paused.is_set(),
+                    camera_back_in_s=(round(self.burst_back_in())
+                                      if self.burst_resting() else None),
                     checkin_due=self.checkin_due and not self.demo)
         with self._snap_lock:
             self._snapshot = snap
@@ -375,7 +385,36 @@ class App:
     def camera_wanted(self) -> bool:
         if self.paused.is_set():
             return False
-        return not (self.call_active and self.s.during_calls == "pause")
+        if self.call_active and self.s.during_calls == "pause":
+            return False
+        return not self.burst_resting()
+
+    # ------------------------------------------------------------ burst sampling
+    def burst_resting(self, now: Optional[float] = None) -> bool:
+        """Burst mode, off phase: camera released, previous state carried forward."""
+        if self.s.sampling != "burst" or (self.calib is not None and not self.calib.done):
+            return False
+        return self._burst_phase(now) >= BURST_ON_S
+
+    def _burst_phase(self, now: Optional[float] = None) -> float:
+        return ((now or time.monotonic()) - self._burst_anchor) % (BURST_ON_S + BURST_OFF_S)
+
+    def burst_back_in(self) -> Optional[float]:
+        if not self.burst_resting():
+            return None
+        return BURST_ON_S + BURST_OFF_S - self._burst_phase()
+
+    def _step_carry(self) -> None:
+        """Once a second while the camera rests, assume you're still doing what you were doing
+        (at the screen, on your phone, or away) so breaks and screen time keep counting.
+        No eye data is invented: blink statistics only use the minutes actually measured."""
+        import dataclasses
+        now = time.monotonic()
+        if self._carry is None or now - self._carry_t < 1.0:
+            return
+        self._carry_t = now
+        self._step(dataclasses.replace(self._carry, t=now, ear_right=0.0, ear_left=0.0,
+                                       vis_right=None, vis_left=None, extrapolated=True))
 
     def pause(self, minutes: Optional[float] = None) -> None:
         self._paused_until = time.monotonic() + minutes * 60 if minutes else None
@@ -450,7 +489,10 @@ class App:
     def _on_settings(self, changes: Dict[str, Any]) -> Settings:
         """Validated settings change from the dashboard; applied live, then saved."""
         with self._settings_lock:
+            before = self.s.sampling
             self.s.apply_ui_changes(changes)
+            if self.s.sampling != before:
+                self._burst_anchor = time.monotonic()      # start with a measuring minute
             try:
                 self.s.save()
             except OSError:

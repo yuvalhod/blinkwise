@@ -64,6 +64,7 @@ EDITABLE = {
     "battery_saver": ["auto", "always", "off"],
     "during_calls": ["quiet", "pause", "off"],
     "check_updates": [True, False],
+    "sampling": ["continuous", "burst"],
 }
 
 
@@ -76,6 +77,7 @@ class Settings:
     focal_px: Optional[float] = None      # set by calibration, overrides camera_hfov_deg
     camera_position: str = "top"          # "top" (above the main screen, the common case) or "bottom"
     battery_saver: str = "auto"           # "auto": 12 fps on battery | "always" | "off"
+    sampling: str = "continuous"          # "burst": camera on 1 minute in every 5 (light mostly off)
     # In a video call: "quiet" (no pop-ups, keep measuring), "pause" (release the camera), "off".
     # Windows/Linux webcams are usually single-user, so there we hand the camera over.
     during_calls: str = field(default_factory=lambda: "quiet" if sys.platform == "darwin" else "pause")

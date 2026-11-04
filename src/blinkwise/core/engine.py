@@ -111,11 +111,12 @@ class Engine:
             self._screen_s += dt
             if eyes_usable:
                 self.stats.add_observed(t, dt)
-        if f.face:
+        if f.face and not f.extrapolated:
             self._hidden.append((t, self.detector.eyes_hidden))
         while self._hidden and t - self._hidden[0][0] > 60:
             self._hidden.popleft()
-        self.attention.update(t, dt, f.face, f.yaw, f.pitch)
+        if not f.extrapolated:
+            self.attention.update(t, dt, f.face, f.yaw, f.pitch)
         if blink is not None:
             out.extend(self._on_blink(blink))
 
@@ -150,7 +151,8 @@ class Engine:
             elif isinstance(ev, BreakEnded):
                 self.break_due = None
 
-        self._track_recent(t, f, attending)
+        if not f.extrapolated:
+            self._track_recent(t, f, attending)
         if t - self._last_esc_tick >= 1.0:
             self._last_esc_tick = t
             if self.s.adaptive_cues and self.s.blink_cue in LADDER:

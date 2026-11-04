@@ -311,6 +311,7 @@ function renderStatus(d){
   if (d.paused){ dot.className = "dot warn"; txt.textContent = d.paused_for_s ? `Paused · ${dur(d.paused_for_s)}` : "Paused"; }
   else if (d.quiet_for_s){ dot.className = "dot live"; txt.textContent = `Quiet · ${dur(d.quiet_for_s)}`; }
   else if (d.demo){ dot.className = "dot live"; txt.textContent = "Demo"; }
+  else if (d.camera_resting){ dot.className = "dot"; txt.textContent = `Camera resting · back in ${dur(d.camera_back_in_s || 0)}`; }
   else if (!d.face){ dot.className = "dot"; txt.textContent = "Away"; }
   else { dot.className = "dot live"; txt.textContent = d.activity === "device" ? "On another device" : "Watching"; }
 }
@@ -466,6 +467,7 @@ const SECTIONS = [
   ["Camera", [
     ["during_calls", "In video calls", "select", [["quiet","Stay quiet"],["pause","Turn camera off"],["off","No change"]]],
     ["battery_saver", "Battery saver", "select", [["auto","On battery"],["always","Always"],["off","Off"]]],
+    ["sampling", "Camera", "select", [["continuous","Always on"],["burst","1 min in every 5"]]],
     ["check_updates", "Check for updates daily", "switch"],
     ["blink_overrides", "Blink detection", "link", "/setup#calibrate"]]]];
 
