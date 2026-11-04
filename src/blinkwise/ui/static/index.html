@@ -88,7 +88,7 @@ svg text{fill:var(--faint);font:12px var(--text)}
 .tr{font-size:10px;margin-left:6px;vertical-align:2px}
 .tr.better{color:var(--good)}.tr.worse{color:var(--hot)}
 .goal{margin-top:18px;padding:16px 18px;background:var(--ink);color:var(--paper);font:400 18px/1.35 var(--display)}
-.goal b{display:block;font:700 10.5px/1 var(--text);letter-spacing:.14em;text-transform:uppercase;color:var(--hot);margin-bottom:8px}
+.goal b{display:block;font:700 10.5px/1 var(--text);letter-spacing:.14em;text-transform:uppercase;color:var(--hot-on-ink);margin-bottom:8px}
 .goal small{display:block;font:13px var(--text);opacity:.75;margin-top:8px}
 .q{margin:0 0 16px}
 .q p{margin:0 0 7px;font-weight:700}
@@ -246,7 +246,7 @@ footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--ink);color:va
   <div id="form"></div>
   <div class="group">Your data</div>
   <div class="panel">
-    <div class="set"><span>Keep history</span><select id="keepDays"><option value="7">1 week</option><option value="30">1 month</option><option value="90">3 months</option><option value="365">1 year</option></select></div>
+    <div class="set"><span>Keep history</span><select id="keepDays" aria-label="Keep history"><option value="7">1 week</option><option value="30">1 month</option><option value="90">3 months</option><option value="365">1 year</option></select></div>
     <div class="set"><span>Download my data</span><a class="btn" href="/api/export" download>Export</a></div>
     <div class="set"><span class="danger">Delete all history</span><button class="btn" id="wipeBtn">Delete</button></div>
   </div>

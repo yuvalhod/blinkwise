@@ -19,19 +19,19 @@
   --display:"Fraunces",Georgia,"Times New Roman",serif;
   --text:"BW Digits","Atkinson Hyperlegible",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --paper:#f3eee5; --sheet:#fbf8f2; --sheet2:#ece6da; --rule:#d8cfbf; --rule2:#e6dfd2;
-  --ink:#1f1b16; --muted:#665e53; --faint:#9c9284;
+  --ink:#1f1b16; --muted:#544c42; --faint:#6c655b;   /* all >= 4.5:1 on paper (WCAG AA) */
   --good:#2e6a4d; --good-soft:rgba(46,106,77,.11);
-  --hot:#d4471c; --hot-soft:rgba(212,71,28,.10);
-  --phone:#33508f; --both:#b97d10; --warn:#a85a12; --bad:#b8321f; --track:#e4ddcf;
+  --hot:#b63d18; --hot-soft:rgba(182,61,24,.10); --hot-on-ink:#ff9a72;
+  --phone:#33508f; --both:#b97d10; --warn:#9b5311; --bad:#b8321f; --track:#e4ddcf;
   --sel:#1f1b16; --on-sel:#fbf8f2;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --paper:#161411; --sheet:#1e1b17; --sheet2:#28241e; --rule:#3a342b; --rule2:#2c2822;
-    --ink:#f0e9dd; --muted:#aaa092; --faint:#71695d;
+    --ink:#f0e9dd; --muted:#bdb3a4; --faint:#968c7c;
     --good:#86c5a0; --good-soft:rgba(134,197,160,.13);
-    --hot:#ff8250; --hot-soft:rgba(255,130,80,.13);
+    --hot:#ff8250; --hot-soft:rgba(255,130,80,.13); --hot-on-ink:#a8381a;
     --phone:#9cb2ea; --both:#e3ae4c; --warn:#e8a15a; --bad:#f07f67; --track:#2b2620;
     --sel:#f0e9dd; --on-sel:#161411;
     color-scheme:dark;
@@ -39,9 +39,9 @@
 }
 :root[data-theme="dark"]{
   --paper:#161411; --sheet:#1e1b17; --sheet2:#28241e; --rule:#3a342b; --rule2:#2c2822;
-  --ink:#f0e9dd; --muted:#aaa092; --faint:#71695d;
+  --ink:#f0e9dd; --muted:#bdb3a4; --faint:#968c7c;
   --good:#86c5a0; --good-soft:rgba(134,197,160,.13);
-  --hot:#ff8250; --hot-soft:rgba(255,130,80,.13);
+  --hot:#ff8250; --hot-soft:rgba(255,130,80,.13); --hot-on-ink:#a8381a;
   --phone:#9cb2ea; --both:#e3ae4c; --warn:#e8a15a; --bad:#f07f67; --track:#2b2620;
   --sel:#f0e9dd; --on-sel:#161411;
   color-scheme:dark;
