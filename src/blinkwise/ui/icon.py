@@ -107,7 +107,8 @@ def blink_animation(size: int = 44, color: Color = (0, 0, 0, 255)):
 
 
 def app_icon(size: int = 1024):
-    """The app icon (Dock/Finder/Launchpad): a white lashed eye on a teal squircle.
+    """The app icon (Dock/Finder/Launchpad): the ink lashed eye on warm paper (the
+    dashboard's palette).
 
     Follows the macOS icon grid: the shape fills ~80% of the canvas with transparent
     margins, and the corner radius is ~22% of the shape.
@@ -119,10 +120,10 @@ def app_icon(size: int = 1024):
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     m = S * 0.1
     box = [m, m, S - m, S - m]
-    # Vertical gradient: deep teal -> lighter teal.
+    # Vertical gradient: light paper -> slightly deeper paper.
     grad = Image.new("RGBA", (S, S))
     gd = ImageDraw.Draw(grad)
-    top, bot = (18, 120, 100), (64, 190, 160)
+    top, bot = (251, 248, 242), (229, 220, 204)
     for y in range(S):
         f = y / (S - 1)
         rgb = tuple(int(a + (b - a) * f) for a, b in zip(top, bot, strict=True))
@@ -130,8 +131,13 @@ def app_icon(size: int = 1024):
     mask = Image.new("L", (S, S), 0)
     ImageDraw.Draw(mask).rounded_rectangle(box, radius=(S - 2 * m) * 0.225, fill=255)
     img.paste(grad, (0, 0), mask)
-    glyph = render("closed", int(S * 0.62), (255, 255, 255, 255))   # brand mark: rest your eyes
+    glyph = render("closed", int(S * 0.62), (31, 27, 22, 255))      # brand mark: rest your eyes
     gx = (S - glyph.width) // 2
     gy = int((S - glyph.height) / 2 + S * 0.02)
     img.alpha_composite(glyph, (gx, gy))
+    # hairline edge so the paper tile holds its shape on light Docks
+    edge = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(edge).rounded_rectangle(box, radius=(S - 2 * m) * 0.225, outline=255,
+                                           width=max(2, S // 256))
+    img.paste(Image.new("RGBA", (S, S), (190, 178, 158, 255)), (0, 0), edge)
     return img.resize((size, size), Image.LANCZOS)

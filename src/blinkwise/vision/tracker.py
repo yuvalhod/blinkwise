@@ -144,12 +144,20 @@ class FaceTracker:
         self.last_iris_px: Optional[float] = None
         self.lock = UserLock()
         self.zoom = FaceZoom(enabled=zoom)
+        self._frame_size = None
         self.low_light = low_light
 
     def process(self, frame_bgr: np.ndarray, t: float) -> FrameFeatures:
         import cv2
 
         h, w = frame_bgr.shape[:2]
+        if (w, h) != self._frame_size:
+            # New frame size (e.g. switched camera resolution): positions remembered in the
+            # old pixel coordinates (zoom crop, where the user was) no longer apply.
+            if self._frame_size is not None:
+                self.zoom = FaceZoom(enabled=self.zoom.enabled)
+                self.lock = UserLock()
+            self._frame_size = (w, h)
         ts_ms = int(t * 1000)
         if ts_ms <= self._last_ts_ms:          # MediaPipe requires strictly increasing timestamps
             ts_ms = self._last_ts_ms + 1

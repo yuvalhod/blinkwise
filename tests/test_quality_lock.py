@@ -90,3 +90,27 @@ def test_face_zoom_follows_small_faces_and_searches_when_lost():
     off = FaceZoom(enabled=False)
     off.update((600, 300, 660, 360), 1280, 720)
     assert off.window is None
+
+
+def test_frame_size_change_resets_pixel_state():
+    """Switching camera resolution must not leave the zoom crop / user lock in old pixels."""
+    from blinkwise.vision import tracker as T
+
+    tr = T.FaceTracker.__new__(T.FaceTracker)       # no MediaPipe needed for this part
+    tr.zoom, tr.lock, tr._frame_size = T.FaceZoom(), T.UserLock(), (640, 360)
+    tr.zoom.window = (100, 50, 300, 200)
+    tr.lock.select([(100, 100, 160, 170)], 1.0, 640)
+    import numpy as np
+
+    class Stop(Exception):
+        pass
+
+    def boom(*a, **k):
+        raise Stop
+    tr._last_ts_ms, tr.low_light = -1, False
+    tr._mp = type("MP", (), {"Image": staticmethod(boom), "ImageFormat": type("F", (), {"SRGB": 0})})
+    try:
+        tr.process(np.zeros((720, 1280, 3), np.uint8), 2.0)
+    except Stop:
+        pass
+    assert tr.zoom.window is None and tr.lock.last_center is None and tr._frame_size == (1280, 720)
