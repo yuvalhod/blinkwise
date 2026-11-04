@@ -74,6 +74,7 @@ class App:
         self.camera_error: Optional[str] = None
         self.update_info: Optional[Dict[str, str]] = None
         self._updates = None
+        self.calib = None                    # calibration.Session while one is running/unsaved
 
     # ----------------------------------------------------------------- public
     def run(self) -> None:
@@ -214,8 +215,11 @@ class App:
         self._drain_commands()
         for ev in self.engine.step(f):
             self._emit(ev)
+        if self.calib is not None and not self.calib.done:
+            self.calib.feed(f)
         now = time.monotonic()
-        if now - self._last_publish >= 0.2:      # the dashboard polls at 1 Hz
+        live = self.calib is not None and not self.calib.done
+        if now - self._last_publish >= (0.08 if live else 0.2):  # calibration cues need to be prompt
             self._last_publish = now
             self._publish()
 
@@ -239,7 +243,9 @@ class App:
                     in_call=self.sys_state.call, call_mode=self.s.during_calls,
                     on_battery=self.sys_state.on_battery, battery_saver=self.battery_saving(),
                     fps_cap=self.fps_cap(), camera_error=self.camera_error,
-                    update=self.update_info if self.s.check_updates else None)
+                    update=self.update_info if self.s.check_updates else None,
+                    calibration=self.calib.state() if self.calib is not None else None,
+                    calibrated=bool(self.s.blink_overrides))
         with self._snap_lock:
             self._snapshot = snap
 
@@ -255,6 +261,25 @@ class App:
                     self._emit(ev)
             elif cmd == "settings":
                 self.engine.apply_settings()
+            elif cmd == "calibrate":
+                from .calibration import Session
+                self.calib = Session()
+            elif cmd == "calibrate_cancel":
+                self.calib = None
+            elif cmd in ("calibrate_save", "calibrate_reset"):
+                over = {}
+                if cmd == "calibrate_save":
+                    if self.calib is None or not self.calib.done or not self.calib.result.ok:
+                        continue
+                    over = self.calib.result.overrides
+                with self._settings_lock:
+                    self.s.blink_overrides = dict(over)
+                    try:
+                        self.s.save()
+                    except OSError:
+                        log.warning("could not save settings")
+                self.engine.apply_settings()
+                self.calib = None
             elif cmd == "break_now":
                 b = self.engine.breaks
                 if b.active is None:
@@ -435,6 +460,9 @@ class App:
             if self.history is not None:
                 self.history.wipe()
             self._today, self._today_at = {}, 0.0
+        elif action.startswith("calibrate"):
+            self.commands.put(action)
+            self._publish_soon()
         elif action == "skip_break":
             self.events.put(("close_break", None))
             self.commands.put("skipped")
@@ -534,7 +562,8 @@ class App:
     @property
     def quiet(self) -> bool:
         """No pop-ups: chosen from the menu, or automatically during a video call."""
-        return self._manual_quiet or self.call_active
+        calibrating = self.calib is not None and not self.calib.done
+        return self._manual_quiet or self.call_active or calibrating
 
     def set_quiet(self, minutes: Optional[float]) -> None:
         self._quiet_until = time.monotonic() + minutes * 60 if minutes else None

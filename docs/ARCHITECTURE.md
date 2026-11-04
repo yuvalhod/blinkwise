@@ -49,6 +49,10 @@ src/blinkwise/
 
 Parameters were chosen on the labelled video and simulations, and sit on a wide plateau: on the real video, precision stays at 1.00 for any prominence threshold from 0.15 to 0.30 (`scripts/eval_blinks.py`).
 
+## Personal calibration
+
+`calibration.py`. The setup page shows a dot that pulses 6 times (blink on each), then asks for 6 s of open eyes and two looks at the keyboard. The worker keeps those ~40 s of FrameFeatures in memory, then re-runs the detector for a small grid of `min_prominence`, `min_rel_prominence`, `noise_k` and `max_pitch_shift` (coordinate search, ~50 runs, a few seconds in a background thread). Score = cued blinks found - 2 x blinks during the open-eyes and keyboard phases. A personal setting is kept only if it beats the default without adding false blinks; values are clamped to the range validated on labelled video (at the most permissive setting the held-out real video gains one false blink and no misses). The frames are dropped afterwards; only the chosen numbers go into `settings.json` (`blink_overrides`).
+
 ## Robustness
 
 * **User lock** (`vision/tracker.py: UserLock`): MediaPipe tracks up to 3 faces. Within 10 s of last seeing the user we follow the face nearest their last position, and if only *other* people are visible we report "no user" rather than adopting them. On a two-person video this cut identity switches from 3 to 0.

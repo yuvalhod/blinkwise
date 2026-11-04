@@ -53,6 +53,9 @@ class Engine:
     def __init__(self, settings: Optional[Settings] = None, monitors: Optional[int] = -1,
                  blink_params: Optional[BlinkParams] = None):
         self.s = settings or Settings()
+        if blink_params is None:
+            from ..calibration import params_from
+            blink_params = params_from(self.s.blink_overrides)
         self.detector = BlinkDetector(blink_params)
         self.stats = RollingStats()
         self.attention = AttentionTracker()
@@ -179,6 +182,8 @@ class Engine:
         b.long_s = self.s.long_break_minutes * 60
         b.long_len = self.s.long_break_seconds
         b.adaptive = self.s.adaptive_breaks
+        from ..calibration import params_from
+        self.detector.p = params_from(self.s.blink_overrides)
 
     def end_break(self, outcome: str) -> Optional[BreakEnded]:
         """UI callback when a break overlay finishes ('timer') or is skipped."""

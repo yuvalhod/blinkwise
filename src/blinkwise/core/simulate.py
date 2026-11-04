@@ -43,6 +43,9 @@ class Scenario:
     phone_blink_factor: float = 1.0           # blink-rate multiplier while on the phone
     decay_per_hour: float = 0.0               # blink rate falls this fraction per hour of
                                               # continuous use (resets after 2+ min away)
+    blink_times: Sequence[float] = ()         # scripted blinks (replaces the random ones)
+    blink_depth: Optional[Tuple[float, float]] = None  # remaining openness at the bottom
+    glance_windows: Sequence[Tuple[float, float]] = ()  # scripted looks at the keyboard
     seed: int = 7
 
 
@@ -77,16 +80,17 @@ class Simulation:
         rng = random.Random(sc.seed)
         n = int(sc.duration_s * sc.fps)
         # --- schedule blinks (Poisson with a 0.6 s refractory gap) ---
-        self.truth = []
+        self.truth = [TruthBlink(bt, True, False) for bt in sc.blink_times]
         t = rng.expovariate(sc.blink_rate / 60.0) + 1.5
-        while t < sc.duration_s - 1:
+        while not sc.blink_times and t < sc.duration_s - 1:
             complete = rng.random() >= sc.incomplete_frac
             is_long = rng.random() < sc.long_frac
             if not any(a <= t <= b + 1.0 for a, b in sc.away) and rng.random() < self._rate_factor(t):
                 self.truth.append(TruthBlink(t, complete, is_long))
                 t += sc.long_hold_s if is_long else 0.0
             t += max(0.6, rng.expovariate(sc.blink_rate / 60.0))
-        blinks = [(b, rng.uniform(0.05, 0.15) if b.complete else rng.uniform(0.45, 0.65))
+        blinks = [(b, rng.uniform(*sc.blink_depth) if sc.blink_depth else
+                   rng.uniform(0.05, 0.15) if b.complete else rng.uniform(0.45, 0.65))
                   for b in self.truth]
         # --- schedule screen dwell periods ---
         shares = [s.share for s in sc.screens]
@@ -96,7 +100,7 @@ class Simulation:
             plan.append((t, rng.choices(list(sc.screens), weights=shares)[0]))
             t += rng.expovariate(1.0 / sc.dwell_s) + 2.0
         # --- keyboard glances (look down ~0.8-2 s) ---
-        glances: List[Tuple[float, float]] = []
+        glances: List[Tuple[float, float]] = list(sc.glance_windows)
         if sc.keyboard_glances_per_min > 0:
             t = rng.expovariate(sc.keyboard_glances_per_min / 60.0)
             while t < sc.duration_s:

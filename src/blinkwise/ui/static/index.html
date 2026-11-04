@@ -437,7 +437,8 @@ const SECTIONS = [
   ["Camera", [
     ["during_calls", "In video calls", "select", [["quiet","Stay quiet"],["pause","Turn camera off"],["off","No change"]]],
     ["battery_saver", "Battery saver", "select", [["auto","On battery"],["always","Always"],["off","Off"]]],
-    ["check_updates", "Check for updates daily", "switch"]]]];
+    ["check_updates", "Check for updates daily", "switch"],
+    ["blink_overrides", "Blink detection", "link", "/setup#calibrate"]]]];
 
 function renderSettings(st){
   $("presets").innerHTML = PRESETS.map(([k,t]) => `<button class="${st.preset===k ? "sel" : ""}" data-p="${k}" aria-pressed="${st.preset===k}">${t}</button>`).join("");
@@ -446,6 +447,7 @@ function renderSettings(st){
     const v = st[k]; let ctl;
     if (type === "select") ctl = `<select data-k="${k}" aria-label="${label}">${opt.map(([ov,ol]) => `<option value="${ov}" ${ov===v?"selected":""}>${ol}</option>`).join("")}</select>`;
     else if (type === "switch") ctl = `<label class="switch"><input type="checkbox" data-k="${k}" ${v ? "checked" : ""} aria-label="${label}"><span></span></label>`;
+    else if (type === "link") ctl = `<a class="btn" href="${opt}">${v && Object.keys(v).length ? "Personal · Retune" : "Tune to my eyes"}</a>`;
     else if (type === "time") ctl = `<input type="time" data-k="${k}" value="${esc(v || "")}" aria-label="${label}">`;
     else ctl = `<input type="number" data-k="${k}" min="${opt[0]}" max="${opt[1]}" step="${opt[2]}" value="${v}" aria-label="${label}">`;
     return `<div class="set"><span>${label}</span>${ctl}</div>`;

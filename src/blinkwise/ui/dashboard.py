@@ -21,7 +21,8 @@ from ..research import REFERENCES
 
 log = logging.getLogger(__name__)
 
-ALLOWED_ACTIONS = {"pause", "resume", "break_now", "skip_break", "wipe"}
+ALLOWED_ACTIONS = {"pause", "resume", "break_now", "skip_break", "wipe",
+                   "calibrate", "calibrate_save", "calibrate_cancel", "calibrate_reset"}
 
 
 def _static(name: str) -> str:

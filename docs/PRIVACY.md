@@ -25,8 +25,10 @@ because a feature reads it:
 | Seconds on your computer screen / looking down at another device, switches | screen time, phone time, switching between them |
 | Minutes of continuous use | your blink-drop pattern and break interval |
 
-Plus: break outcomes (taken / skipped), your settings, and two marker files (first-run
-notice shown, date of the last daily summary).
+Plus: break outcomes (taken / skipped), your settings, and small marker files (first-run
+notice shown, date of the last daily summary, date and result of the last update check).
+If you tune blink detection to your eyes, the ~40 s of measurements it uses stay in memory
+and are dropped right after; only up to four detector numbers are saved in your settings.
 
 **Not stored, ever:** images or video, face landmarks or measurements that could identify
 you, head angles, the suggestions you were shown, or anything about other people in view

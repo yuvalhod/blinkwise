@@ -19,6 +19,7 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 | | |
 |---|---|
 | **Blink tracking** | Counts blinks and measures each one: complete or partial, short or long (fatigue). It adapts to your eyes, your glasses and your head position. |
+| **Tune to your eyes** | A 40-second routine (Settings > Blink detection, or the setup guide): blink when a dot pulses, keep your eyes open, glance at your keyboard. Blinkwise tests a few detector settings on that recording and keeps a personal one only if it finds more of your blinks without inventing any. For a simulated person whose lids barely move, recall on a separate 5-minute session went from 46% to 94% with no false blinks. |
 | **Stare cue** | If you haven't blinked for 10 s, a small eye blinks twice at the top of your screen. Blink along with it. On-screen blink animations raised blink rate by ~7/min in a crossover trial ([Nosch 2015](https://pubmed.ncbi.nlm.nih.gov/26164310/)). |
 | **Smart breaks** | 20-20-20 micro breaks and an hourly 5-minute break. Only *screen time* counts toward them. If the camera sees you look away or leave, that already counts as the break and you aren't reminded. Breaks come sooner when your blink rate is low. |
 | **Multi-screen awareness** | Learns how many screens you *actually use* from your head pose. It shows the time split, how often you switch, how far you turn your head, and whether you blink less on one screen than another. |

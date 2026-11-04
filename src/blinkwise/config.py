@@ -112,6 +112,7 @@ class Settings:
     store_history: bool = True
     history_days: int = 90                # history older than this is deleted automatically
     check_updates: bool = True            # once a day, anonymous; never downloads anything
+    blink_overrides: dict = field(default_factory=dict)  # personal detector settings (calibration)
 
     @classmethod
     def path(cls) -> Path:
