@@ -53,6 +53,7 @@ class AttentionTracker:
     away_yaw_deg: float = 55.0        # beyond this the user isn't looking at a screen
     switch_dwell_s: float = 1.0       # a zone switch must last this long to count
     _samples: Deque[_Sample] = field(default_factory=deque)
+    _obs: float = 0.0
     _zones: List[Zone] = field(default_factory=list)
     _zones_at: float = -1e9
     _current: Optional[int] = None
@@ -66,8 +67,9 @@ class AttentionTracker:
         if not self.attending(face, yaw):
             return
         self._samples.append(_Sample(t, dt, yaw, pitch))
+        self._obs += dt
         while self._samples and t - self._samples[0].t > self.horizon_s:
-            self._samples.popleft()
+            self._obs -= self._samples.popleft().dt
         if t - self._zones_at > 5.0:            # recluster every few seconds
             self._zones = self._cluster()
             self._zones_at = t
@@ -92,7 +94,7 @@ class AttentionTracker:
         return len(self._switches) / (span / 60.0) if span >= 60 else 0.0
 
     def observed_s(self) -> float:
-        return float(sum(s.dt for s in self._samples))
+        return max(0.0, self._obs)          # running total (summing 14k samples was the hot spot)
 
     # -- internals ------------------------------------------------------------
     def _zone_of(self, yaw: float) -> Optional[int]:

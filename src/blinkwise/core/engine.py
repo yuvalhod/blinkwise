@@ -69,6 +69,7 @@ class Engine:
         self._last_cue_t = -1e9
         self._closed_run = 0.0
         self._hidden: Deque[Tuple[float, bool]] = deque()    # eyes-hidden flags, last 60 s
+        self._med_cache: Optional[Tuple[float, tuple]] = None
         self._continuous_s = 0.0      # screen time since the last real (2 min+) break
         self._away_run = 0.0
         self._down_now = False
@@ -292,16 +293,23 @@ class Engine:
         return st.rate is not None and st.rate < self.s.low_blink_rate
 
     def _track_recent(self, t: float, f: FrameFeatures, attending: bool) -> None:
-        if attending:
+        # Slow-changing values: twice a second is plenty for 2-5 minute medians, and keeps
+        # snapshots cheap (they run 5x a second for the dashboard and menu).
+        if attending and (not self._recent or t - self._recent[-1][0] >= 0.5):
             self._recent.append((t, f.distance_cm, f.pitch, f.yaw, f.luminance, f.face_px))
         while self._recent and t - self._recent[0][0] > 300:
             self._recent.popleft()
 
     def _medians(self, t: float):
+        if self._med_cache is not None and t - self._med_cache[0] < 1.0:
+            return self._med_cache[1]
+
         def med(idx: int, window: float) -> Optional[float]:
             vals = [r[idx] for r in self._recent if r[idx] is not None and t - r[0] <= window]
             return statistics.median(vals) if len(vals) >= 10 else None
-        return med(1, 120), med(2, 300), med(3, 300), med(4, 120)
+        out = (med(1, 120), med(2, 300), med(3, 300), med(4, 120))
+        self._med_cache = (t, out)
+        return out
 
     def quality(self) -> Quality:
         t = self._last_t or 0.0
