@@ -24,10 +24,12 @@ except Exception:  # pragma: no cover - depends on the Python build
     tk = None  # type: ignore
     TK_AVAILABLE = False
 
-BG = "#14181f"
-FG = "#e9eef5"
-MUTED = "#9aa7b8"
-ACCENT = "#5cc8a8"
+BG = "#1e1b17"            # warm charcoal, the dashboard's dark "paper"
+FG = "#f0e9dd"
+MUTED = "#aaa092"
+ACCENT = "#ff8250"        # vermilion
+RULE = "#3a342b"
+SERIF = "Georgia"         # Fraunces can't be loaded into Tk; Georgia ships everywhere
 FONT = ("Helvetica", 12)
 
 
@@ -165,19 +167,19 @@ class BreakCard:
         frame = tk.Frame(win, bg=BG, padx=24, pady=18)
         frame.pack(fill="both", expand=True)
         title = "Eye break - 20-20-20" if kind == "micro" else "Time for a real break"
-        tk.Label(frame, text=title, bg=BG, fg=FG, font=("Helvetica", 17, "bold")).pack(anchor="w")
+        tk.Label(frame, text=title, bg=BG, fg=FG, font=(SERIF, 19)).pack(anchor="w")
         tk.Label(frame, text=exercise or "", bg=BG, fg=FG, font=FONT, wraplength=self.W - 48,
                  justify="left").pack(anchor="w", pady=(8, 2))
         tk.Label(frame, text=reason, bg=BG, fg=MUTED, font=("Helvetica", 10),
                  wraplength=self.W - 48, justify="left").pack(anchor="w")
-        self._bar = tk.Canvas(frame, height=6, bg="#2a3340", highlightthickness=0)
+        self._bar = tk.Canvas(frame, height=6, bg=RULE, highlightthickness=0)
         self._bar.pack(fill="x", pady=(14, 10))
         row = tk.Frame(frame, bg=BG)
         row.pack(fill="x")
         self._count = tk.Label(row, text="", bg=BG, fg=ACCENT, font=("Helvetica", 14, "bold"))
         self._count.pack(side="left")
         tk.Button(row, text="Skip", command=lambda: self.finish("skipped"),
-                  relief="flat", bg="#2a3340", fg=FG, activebackground="#36404f",
+                  relief="flat", bg=RULE, fg=FG, activebackground="#4a4238",
                   activeforeground=FG, padx=14).pack(side="right")
         self._total = max(1.0, seconds)
         self._left = seconds
@@ -224,9 +226,9 @@ class Toast:
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"{self.W}x{self.H}+{sw - self.W - 24}+{sh - self.H - 72}")
         f = tk.Frame(win, bg=BG, padx=16, pady=12, highlightthickness=1,
-                     highlightbackground="#2a3340")
+                     highlightbackground=RULE)
         f.pack(fill="both", expand=True)
-        tk.Label(f, text=title, bg=BG, fg=FG, font=("Helvetica", 13, "bold"),
+        tk.Label(f, text=title, bg=BG, fg=FG, font=(SERIF, 15),
                  wraplength=self.W - 32, justify="left").pack(anchor="w")
         short = message if len(message) < 150 else message[:147].rsplit(" ", 1)[0] + "..."
         tk.Label(f, text=short, bg=BG, fg=MUTED, font=("Helvetica", 10),
@@ -287,7 +289,7 @@ class BigBlink:
         self.c.delete("all")
         draw_eye(self.c, self.W / 2, self.H / 2 - 22, 190, o, ACCENT, width=6)
         self.c.create_text(self.W / 2, self.H - 46, text="Blink", fill=FG,
-                           font=("Helvetica", 30, "bold"))
+                           font=(SERIF, 32))
         self.c.create_text(self.W / 2, self.H - 16, text="slowly, all the way closed", fill=MUTED,
                            font=("Helvetica", 12))
         if f < 2 * period + 35:
@@ -320,9 +322,9 @@ class ImmersiveBreak:
         _topmost(win)
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"{sw}x{sh}+0+0")
-        win.configure(bg="#0b0e12")
+        win.configure(bg="#161411")
         self.W, self.H = sw, sh
-        self.c = tk.Canvas(win, width=sw, height=sh, bg="#0b0e12", highlightthickness=0)
+        self.c = tk.Canvas(win, width=sw, height=sh, bg="#161411", highlightthickness=0)
         self.c.pack(fill="both", expand=True)
         self.kind = kind
         self.total = max(1.0, seconds)
@@ -333,7 +335,7 @@ class ImmersiveBreak:
                       else "Time for a real break")
         self.sub = exercise or ""
         self.btn = tk.Button(win, text="Skip", command=lambda: self.finish("skipped"),
-                             relief="flat", bg="#1f2630", fg=FG, activebackground="#2b3440",
+                             relief="flat", bg="#2a2620", fg=FG, activebackground="#3a342b",
                              activeforeground=FG, padx=18, pady=6, font=("Helvetica", 13))
         win.bind("<Escape>", lambda _e: self._esc())
         win.focus_force()
@@ -351,17 +353,17 @@ class ImmersiveBreak:
         c.delete("all")
         breathe = 0.5 + 0.5 * math.cos(2 * math.pi * self.elapsed / 6.0)   # slow 6 s blink
         draw_eye(c, W / 2, H * 0.30, min(260, W * 0.22), breathe, ACCENT, width=7)
-        c.create_text(W / 2, H * 0.47, text=self.title, fill=FG, font=("Helvetica", 34, "bold"))
+        c.create_text(W / 2, H * 0.47, text=self.title, fill=FG, font=(SERIF, 38))
         c.create_text(W / 2, H * 0.53, text=self.sub, fill=MUTED, font=("Helvetica", 16),
                       width=min(760, W * 0.8), justify="center")
         left = max(0, math.ceil(self.left))
         m, s = divmod(left, 60)
         c.create_text(W / 2, H * 0.68, text=f"{m}:{s:02d}" if m else str(s), fill=FG,
-                      font=("Helvetica", 96, "bold"))
+                      font=(SERIF, 110))
         bw = min(520, W * 0.5)
         frac = 1 - self.left / self.total
         c.create_rectangle(W / 2 - bw / 2, H * 0.78, W / 2 + bw / 2, H * 0.78 + 8,
-                           fill="#1f2630", outline="")
+                           fill="#2a2620", outline="")
         c.create_rectangle(W / 2 - bw / 2, H * 0.78, W / 2 - bw / 2 + bw * frac, H * 0.78 + 8,
                            fill=ACCENT, outline="")
         if self.elapsed >= self.skip_at:
@@ -381,7 +383,7 @@ class ImmersiveBreak:
         c.delete("all")
         draw_eye(c, W / 2, H * 0.40, min(260, W * 0.22), 1.0, ACCENT, width=7)
         c.create_text(W / 2, H * 0.58, text="Nice. Back to it.", fill=FG,
-                      font=("Helvetica", 34, "bold"))
+                      font=(SERIF, 38))
         self.win.after(1200, lambda: self.finish("timer"))
 
     def finish(self, outcome: str, notify_engine: bool = True) -> None:

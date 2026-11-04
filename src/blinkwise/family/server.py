@@ -416,6 +416,10 @@ class FamilyServer:
                     return self._json({**server.store.parent(pid),
                                        "children": server.store.children(pid, time.time()),
                                        "labels": {k: v[3] for k, v in P.FIELDS.items()}})
+                from ..ui.dashboard import asset
+                a = asset(u.path)
+                if a is not None:
+                    return self._send(200, a[0], a[1])
                 if u.path == "/healthz":
                     return self._json({"ok": True})
                 return self._send(404, b"not found", "text/plain")
@@ -503,95 +507,92 @@ def _msg_page(text: str) -> str:
 
 
 _STYLE = """
-:root{--bg:#f3f5f8;--card:#fff;--ink:#0f1724;--muted:#5e6b7d;--line:#e4e8ee;--accent:#0e9f7e;--soft:rgba(14,159,126,.12);--warn:#c27c00}
-@media (prefers-color-scheme: dark){:root{--bg:#0a0f1a;--card:#121926;--ink:#e8eef6;--muted:#8b98ab;--line:rgba(255,255,255,.08);--accent:#34d3a6;--soft:rgba(52,211,166,.14);--warn:#f5b94a}}
-*{box-sizing:border-box}[hidden]{display:none!important}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-.wrap{max-width:720px;margin:0 auto;padding:28px 16px 56px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:18px;margin-bottom:18px}
-.mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(160deg,#127864,#40be9f)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:14px}
-h1{font-size:22px;margin:0 0 6px}h2{font-size:17px;margin:0}
-.muted{color:var(--muted)}.small{font-size:13px}
-input{font:inherit;padding:10px 12px;border-radius:11px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
-button{font:inherit;font-weight:600;padding:10px 16px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
-button.primary{background:var(--accent);border-color:transparent;color:#05241c}
+.wrap{max-width:760px;margin:0 auto;padding:24px 20px 64px}
+.top{display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--ink);margin-bottom:28px}
+.top .fam{font:italic 400 15px var(--display);color:var(--muted)}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-top:2px solid var(--ink);padding:22px 24px;margin-bottom:18px}
+h1{font-size:44px;line-height:1.05;margin:0 0 10px;letter-spacing:-.02em}
+h2{font-size:28px}
+.lead{font:italic 400 19px/1.45 var(--display);color:var(--muted);margin:0 0 22px}
+.small{font-size:13.5px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.row input{flex:1;min-width:180px}
-.msg{padding:10px 12px;border-radius:11px;background:var(--soft)}
-.code{font:600 26px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.08em;padding:10px 14px;border-radius:12px;background:var(--soft);display:inline-block}
-.grid{display:grid;grid-template-columns:1fr auto auto;gap:6px 16px;font-size:14px;margin-top:12px}
-.grid .h{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.grid .v{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
-.grid .p{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
-.head{display:flex;align-items:center;gap:10px}.head .sp{flex:1}
-.chip{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--soft);color:var(--accent)}
-.chip.off{background:transparent;border:1px solid var(--line);color:var(--muted)}
-a{color:var(--accent)}
+.row input{flex:1;min-width:200px}
+.msg{padding:12px 14px;border-left:3px solid var(--good);background:var(--good-soft)}
+.code{font:400 40px/1.1 var(--display);letter-spacing:.06em;display:inline-block;padding:8px 0;border-bottom:2px solid var(--hot)}
+.grid{display:grid;grid-template-columns:1fr auto auto;gap:0;font-size:14.5px;margin-top:14px;align-items:baseline}
+.grid>*{padding:9px 0;border-top:1px solid var(--rule2)}
+.grid .h{font:700 11px/1 var(--text);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);border-top:0}
+.grid .v{text-align:right;font:400 20px/1 var(--display);padding-left:18px}
+.grid .p{text-align:right;color:var(--faint);padding-left:18px}
+.head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.head .sp{flex:1}
+.chip.off{color:var(--faint)}
+.chip.on{color:var(--good)}
+.link{color:var(--hot);font-size:13.5px}
+label.check{display:flex;gap:8px;align-items:center;font-size:14px}
 """
 
-SIGNIN_PAGE = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+_HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Blinkwise Family</title>
-<style>{_STYLE}</style></head><body><div class="wrap">
-<div class="brand"><span class="mark"></span>Blinkwise Family</div>
-<div class="card">
-<h1>Sign in or create an account</h1>
-<p class="muted">See your child's weekly eye habits: screen time, blink rate, breaks. We'll email you a sign-in link; there's no password.</p>
+<link rel="stylesheet" href="/theme.css"><style>""" + _STYLE + """</style></head><body><div class="wrap">
+<header class="top"><span class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 21c8-9 24-9 32 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M4 21c8 8 24 8 32 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="20" cy="21" r="5.2" fill="var(--hot)"/><path d="M9 14.5 7 11M14.5 11.5 13.5 8M20 10.5V7M25.5 11.5 26.5 8M31 14.5 33 11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Blinkwise</span><span class="fam">Family</span><span style="flex:1"></span><!--NAV--></header>"""
+
+
+SIGNIN_PAGE = _HEAD + """
+<h1>Your family's eye habits, once a week.</h1>
+<p class="lead">Screen time, blink rate and breaks for each child, from Blinkwise on their computer. Sign in with your email; there's no password.</p>
+<div class="sheet">
 <!--MSG-->
 <form id="f" class="row"><input type="email" id="email" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><button class="primary">Email me a link</button></form>
 <p id="sent" class="msg" hidden>Check your inbox for a sign-in link. It works once, for 15 minutes.</p>
-<p id="err" class="small" style="color:var(--warn)" hidden></p>
+<p id="err" class="small" style="color:var(--hot)" hidden></p>
 </div>
-<p class="small muted">Only weekly totals are shared, never video, images or minute-by-minute data. Your child sees exactly what's shared and when sharing is on.</p>
+<p class="small muted">Only weekly totals are shared, never video, images or minute-by-minute data. Your child sees exactly what's shared, and when.</p>
 </div><script>
-document.getElementById("f").onsubmit = async e => {{
+document.getElementById("f").onsubmit = async e => {
   e.preventDefault();
-  const r = await fetch("/auth/start", {{method:"POST", headers:{{"Content-Type":"application/json"}}, body: JSON.stringify({{email: document.getElementById("email").value}})}});
-  const d = await r.json().catch(() => ({{}}));
+  const r = await fetch("/auth/start", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({email: document.getElementById("email").value})});
+  const d = await r.json().catch(() => ({}));
   document.getElementById("err").hidden = r.ok; document.getElementById("err").textContent = d.error || "";
   document.getElementById("sent").hidden = !r.ok; if (r.ok) document.getElementById("f").hidden = true;
-}};
+};
 </script></body></html>"""
 
-PARENT_PAGE = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Blinkwise Family</title>
-<style>{_STYLE}</style></head><body><div class="wrap">
-<div class="brand"><span class="mark"></span>Blinkwise Family<span style="flex:1"></span><button id="out" class="small">Sign out</button></div>
+PARENT_PAGE = _HEAD.replace("<!--NAV-->", '<button id="out" class="ghost">Sign out</button>') + """
 <div id="kids"></div>
-<div class="card"><h2>Add a child</h2>
-<p class="muted small">You'll get a code to type into Blinkwise on your child's computer (Settings &gt; Family).</p>
+<div class="sheet"><h2>Add a child</h2>
+<p class="muted small">You'll get a code to type into Blinkwise on their computer (Settings, Family).</p>
 <form id="add" class="row"><input id="name" maxlength="40" placeholder="Name or nickname" aria-label="Child's name"><button class="primary">Get a code</button></form></div>
-<div class="card"><div class="head"><h2>Weekly email</h2><span class="sp"></span><label class="small"><input type="checkbox" id="digest" style="width:auto"> Monday mornings</label></div>
+<div class="sheet"><div class="head"><h2>Monday email</h2><span class="sp"></span><label class="check"><input type="checkbox" id="digest" style="width:auto"> Send me the weekly totals</label></div>
 <p class="muted small" id="me"></p>
-<p class="small"><a href="#" id="del">Delete my account and all data</a></p></div>
+<p class="small"><a href="#" id="del" class="link">Delete my account and all data</a></p></div>
 </div><script>
-const H = {{"Content-Type":"application/json","X-Blinkwise":"1"}};
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}}[c]));
-const post = (u, b) => fetch(u, {{method:"POST", headers:H, body: JSON.stringify(b || {{}})}}).then(r => r.json());
+const H = {"Content-Type":"application/json","X-Blinkwise":"1"};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const post = (u, b) => fetch(u, {method:"POST", headers:H, body: JSON.stringify(b || {})}).then(r => r.json());
 const SHOW = ["screen_per_day","phone_per_day","blink_rate","full_blinks","breaks_pct","posture_per_day","distance_cm","checkin_total"];
-function ago(ts){{ if (!ts) return "never"; const d = Math.floor((Date.now()/1000 - ts)/86400); return d < 1 ? "today" : d === 1 ? "yesterday" : d + " days ago"; }}
-async function load(){{
-  const r = await fetch("/api/me"); if (r.status === 401) {{ location.reload(); return; }}
+function ago(ts){ if (!ts) return "never"; const d = Math.floor((Date.now()/1000 - ts)/86400); return d < 1 ? "today" : d === 1 ? "yesterday" : d + " days ago"; }
+async function load(){
+  const r = await fetch("/api/me"); if (r.status === 401) { location.reload(); return; }
   const me = await r.json();
   document.getElementById("digest").checked = me.digest;
   document.getElementById("me").textContent = "Signed in as " + me.email;
-  document.getElementById("kids").innerHTML = me.children.map(c => {{
+  document.getElementById("kids").innerHTML = me.children.map(c => {
     const [w, p] = [c.weeks[0], c.weeks[1]];
     let body;
-    if (!c.paired && c.code) body = `<p class="muted small">On ${{esc(c.name)}}'s computer, open Blinkwise &gt; Settings &gt; Family and enter:</p><span class="code">${{esc(c.code)}}</span><p class="muted small">Valid for 24 hours.</p>`;
-    else if (!c.paired) body = `<p class="muted small">${{c.stopped_at ? "Sharing was stopped on " + esc(c.name) + "'s computer, and their data here was deleted." : "Not connected."}}</p><button data-code="${{c.id}}">New code</button>`;
+    if (!c.paired && c.code) body = `<p class="muted small">On ${esc(c.name)}'s computer, open Blinkwise, Settings, Family, and enter:</p><span class="code">${esc(c.code)}</span><p class="muted small">Valid for 24 hours.</p>`;
+    else if (!c.paired) body = `<p class="muted small">${c.stopped_at ? "Sharing was stopped on " + esc(c.name) + "'s computer, and their data here was deleted." : "Not connected."}</p><button data-code="${c.id}">New code</button>`;
     else if (!w) body = `<p class="muted small">Connected. The first weekly totals arrive within a day.</p>`;
-    else body = `<div class="grid"><span class="h">Week of ${{esc(w.week_start)}}</span><span class="h" style="text-align:right">${{w.days_active}} day${{w.days_active === 1 ? "" : "s"}}</span><span class="h" style="text-align:right">${{p ? "Week before" : ""}}</span>` +
-      SHOW.filter(k => k in w).map(k => `<span>${{esc(me.labels[k])}}</span><span class="v">${{esc(w[k])}}</span><span class="p">${{p && k in p ? esc(p[k]) : ""}}</span>`).join("") + `</div>`;
-    return `<div class="card"><div class="head"><h2>${{esc(c.name)}}</h2><span class="chip ${{c.paired ? "" : "off"}}">${{c.paired ? "Sharing" : "Not connected"}}</span><span class="sp"></span><span class="muted small">${{c.paired ? "Updated " + ago(c.last_seen) : ""}}</span></div>${{body}}
-      <p class="small" style="margin:12px 0 0"><a href="#" data-rm="${{c.id}}">Remove</a></p></div>`;
-  }}).join("");
-  document.querySelectorAll("[data-code]").forEach(b => b.onclick = async () => {{ await post(`/api/children/${{b.dataset.code}}/code`); load(); }});
-  document.querySelectorAll("[data-rm]").forEach(a => a.onclick = async e => {{ e.preventDefault(); if (confirm("Remove this child and delete their data?")) {{ await post(`/api/children/${{a.dataset.rm}}/remove`); load(); }} }});
-}}
-document.getElementById("add").onsubmit = async e => {{ e.preventDefault(); const d = await post("/api/children", {{name: document.getElementById("name").value}}); if (d.error) alert(d.error); document.getElementById("name").value = ""; load(); }};
-document.getElementById("digest").onchange = e => post("/api/digest", {{on: e.target.checked}});
-document.getElementById("out").onclick = async () => {{ await post("/auth/signout"); location.href = "/"; }};
-document.getElementById("del").onclick = async e => {{ e.preventDefault(); if (confirm("Delete your account, your children's links and all their data?")) {{ await post("/api/account/delete"); location.href = "/"; }} }};
+    else body = `<div class="grid"><span class="h">Week of ${esc(w.week_start)} · ${w.days_active} day${w.days_active === 1 ? "" : "s"}</span><span class="h" style="text-align:right">This week</span><span class="h" style="text-align:right">${p ? "Before" : ""}</span>` +
+      SHOW.filter(k => k in w).map(k => `<span class="muted">${esc(me.labels[k])}</span><span class="v">${esc(w[k])}</span><span class="p">${p && k in p ? esc(p[k]) : ""}</span>`).join("") + `</div>`;
+    return `<div class="sheet"><div class="head"><h2>${esc(c.name)}</h2><span class="chip ${c.paired ? "on" : "off"}">${c.paired ? "Sharing" : "Not connected"}</span><span class="sp"></span><span class="faint small">${c.paired ? "Updated " + ago(c.last_seen) : ""}</span></div>${body}
+      <p class="small" style="margin:14px 0 0"><a href="#" class="link" data-rm="${c.id}">Remove</a></p></div>`;
+  }).join("");
+  document.querySelectorAll("[data-code]").forEach(b => b.onclick = async () => { await post(`/api/children/${b.dataset.code}/code`); load(); });
+  document.querySelectorAll("[data-rm]").forEach(a => a.onclick = async e => { e.preventDefault(); if (confirm("Remove this child and delete their data?")) { await post(`/api/children/${a.dataset.rm}/remove`); load(); } });
+}
+document.getElementById("add").onsubmit = async e => { e.preventDefault(); const d = await post("/api/children", {name: document.getElementById("name").value}); if (d.error) alert(d.error); document.getElementById("name").value = ""; load(); };
+document.getElementById("digest").onchange = e => post("/api/digest", {on: e.target.checked});
+document.getElementById("out").onclick = async () => { await post("/auth/signout"); location.href = "/"; };
+document.getElementById("del").onclick = async e => { e.preventDefault(); if (confirm("Delete your account, your children's links and all their data?")) { await post("/api/account/delete"); location.href = "/"; } };
 load();
 </script></body></html>"""

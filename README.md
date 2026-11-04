@@ -8,6 +8,8 @@ It lives in your menu bar as an eye with lashes: open while it's watching, close
 
 ![Menu bar](docs/img/menubar.png)
 
+![Dashboard](docs/img/dashboard.png)
+
 ## Why
 
 Relaxed eyes blink about 15-20 times a minute. On a screen that typically falls to a third or less ([Patel 1991](https://pubmed.ncbi.nlm.nih.gov/1766652/)), and more of the blinks that do happen are only *partial*. Partial blinks turn out to matter as much as the count: eye-strain symptoms track the share of incomplete blinks more closely than blink rate ([Portello 2013](https://pubmed.ncbi.nlm.nih.gov/?term=Blink+rate,+incomplete+blinks+and+computer+vision+syndrome)). Roughly half of all computer users report digital eye strain. A generation that grows up on two or three screens at once gets more of it, and earlier.
@@ -173,4 +175,4 @@ Blinkwise is a habit tool. It doesn't diagnose or treat anything. See an eye-car
 
 ## License
 
-MIT
+MIT. Bundled fonts and icons are under their own open licenses; see [THIRD_PARTY.md](THIRD_PARTY.md).

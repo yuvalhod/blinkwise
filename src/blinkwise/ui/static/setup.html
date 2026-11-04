@@ -4,77 +4,60 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blinkwise Setup</title>
+<link rel="stylesheet" href="/theme.css">
 <style>
-:root{
-  --bg:#f3f5f8; --glow:rgba(14,159,126,.10); --card:#ffffff; --ink:#0f1724; --muted:#5e6b7d; --line:#e4e8ee;
-  --accent:#0e9f7e; --accent-soft:rgba(14,159,126,.12); --warn:#c27c00; --warn-soft:rgba(194,124,0,.12);
-  --bad:#d64545; --bad-soft:rgba(214,69,69,.12); --track:#e9edf2;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0a0f1a; --glow:rgba(52,211,166,.12); --card:rgba(255,255,255,.035); --ink:#e8eef6; --muted:#8b98ab;
-    --line:rgba(255,255,255,.075); --accent:#34d3a6; --accent-soft:rgba(52,211,166,.14); --warn:#f5b94a;
-    --warn-soft:rgba(245,185,74,.14); --bad:#ff7a6b; --bad-soft:rgba(255,122,107,.14); --track:rgba(255,255,255,.08);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0a0f1a; --glow:rgba(52,211,166,.12); --card:rgba(255,255,255,.035); --ink:#e8eef6; --muted:#8b98ab;
-  --line:rgba(255,255,255,.075); --accent:#34d3a6; --accent-soft:rgba(52,211,166,.14); --warn:#f5b94a;
-  --warn-soft:rgba(245,185,74,.14); --bad:#ff7a6b; --bad-soft:rgba(255,122,107,.14); --track:rgba(255,255,255,.08);
-}
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
-  background-image:radial-gradient(900px 500px at 50% -15%,var(--glow),transparent 60%);background-attachment:fixed;
-  font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-.wrap{max-width:760px;margin:0 auto;padding:28px 16px 56px}
-h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
-.lead{color:var(--muted);margin:0 0 20px}
-.steps{display:flex;gap:6px;margin:0 0 16px}
-.steps span{flex:1;height:4px;border-radius:2px;background:var(--track)}
-.steps span.on{background:var(--accent)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px 24px;margin-bottom:14px;backdrop-filter:blur(12px)}
-h2{font-size:18px;margin:0 0 6px}
-.muted{color:var(--muted)}
-.checks{list-style:none;padding:0;margin:14px 0 0}
-.checks li{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line);align-items:flex-start}
+:root{--bg:var(--paper);--card:var(--sheet);--line:var(--rule);--accent:var(--good);--accent-soft:var(--good-soft);
+  --warn-soft:color-mix(in srgb,var(--warn) 14%,transparent);--bad-soft:var(--hot-soft)}
+.wrap{max-width:760px;margin:0 auto;padding:26px 20px 64px}
+.top{display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:1px solid var(--ink);margin-bottom:26px}
+h1{font-size:44px;line-height:1.05;margin:0 0 8px;letter-spacing:-.02em}
+.lead{color:var(--muted);margin:0 0 22px;font:italic 400 19px/1.4 var(--display)}
+.steps{display:flex;gap:6px;margin:0 0 22px}
+.steps span{flex:1;height:3px;background:var(--track)}
+.steps span.on{background:var(--hot)}
+.card{background:var(--sheet);border:1px solid var(--rule);border-top:2px solid var(--ink);padding:24px 26px;margin-bottom:16px}
+h2{font-size:26px;margin:0 0 6px}
+.checks{list-style:none;padding:0;margin:16px 0 0}
+.checks li{display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--rule2);align-items:flex-start}
 .checks li:first-child{border-top:0}
-.dot{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;margin-top:1px}
-.dot.ok{background:var(--accent-soft);color:var(--accent)}
-.dot.warn{background:var(--warn-soft);color:var(--warn)}
-.dot.bad{background:var(--bad-soft);color:var(--bad)}
-.dot.wait{background:var(--track);color:var(--muted)}
+.dot{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;margin-top:1px;border:1.5px solid currentColor}
+.dot.ok{color:var(--good)}
+.dot.warn{color:var(--warn)}
+.dot.bad{color:var(--hot);background:var(--hot-soft)}
+.dot.wait{color:var(--faint)}
 .checks b{display:block}
-.checks small{color:var(--muted);font-size:13px}
-.diagram{display:flex;justify-content:center;margin:8px 0 0}
-svg text{fill:var(--muted);font-size:11px}
-button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:11px;padding:9px 16px;cursor:pointer}
-button.primary{background:var(--accent);border-color:transparent;color:#05241c;font-weight:600}
-button:disabled{opacity:.45;cursor:default}
-.row{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
-.blinks{display:flex;gap:14px;justify-content:center;margin:18px 0 6px}
-.blinks svg{width:64px;height:40px}
-.styles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.checks small{color:var(--muted);font-size:14px}
+.diagram{display:flex;justify-content:center;margin:10px 0 0}
+svg text{fill:var(--muted);font:11px var(--text)}
+.row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.blinks{display:flex;gap:14px;justify-content:center;margin:20px 0 6px}
+.blinks svg{width:72px;height:45px}
+.styles{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:14px;border:1px solid var(--ink)}
 @media (max-width:620px){.styles{grid-template-columns:1fr}}
-.style{border:1.5px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;background:var(--card);color:var(--ink);text-align:left}
-.style.sel{border-color:var(--accent);background:var(--accent-soft)}
-.style b{display:block;margin-bottom:4px}
-.style small{color:var(--muted);font-size:13px;line-height:1.45;display:block}
-.tips{margin:8px 0 0;padding-left:18px}
-.tips li{margin:4px 0}
+.style{border:0;border-radius:0;padding:16px;cursor:pointer;background:transparent;color:var(--ink);text-align:left;display:block;font-weight:400}
+.style+.style{border-left:1px solid var(--rule)}
+@media (max-width:620px){.style+.style{border-left:0;border-top:1px solid var(--rule)}}
+.style:hover{background:var(--sheet2);color:var(--ink)}
+.style.sel{background:var(--ink);color:var(--paper)}
+.style b{display:block;margin-bottom:6px;font:400 21px/1.1 var(--display)}
+.style small{opacity:.75;font-size:13.5px;line-height:1.45;display:block}
+.tips{margin:10px 0 0;padding-left:20px}
+.tips li{margin:5px 0}
 .hidden{display:none}
-.stage{position:relative;height:200px;display:grid;place-items:center;margin:14px 0 8px}
-.cue{width:84px;height:84px;border-radius:50%;background:var(--track);transition:transform .12s ease,background .12s ease}
-.cue.on{background:var(--accent);transform:scale(1.35);box-shadow:0 0 0 14px var(--accent-soft)}
-.arrow{font-size:64px;line-height:1;color:var(--accent);position:absolute}
-.prompt{text-align:center;font-weight:600;font-size:17px;margin:0;min-height:26px}
-.bar{height:6px;border-radius:3px;background:var(--track);overflow:hidden;margin-top:14px}
-.bar span{display:block;height:100%;width:0;background:var(--accent);transition:width .2s linear}
-.link{background:none;border:0;color:var(--accent);padding:0;font-weight:600;cursor:pointer}
+.stage{position:relative;height:210px;display:grid;place-items:center;margin:16px 0 8px;border:1px solid var(--rule2);background:var(--paper)}
+.cue{width:84px;height:84px;border-radius:50%;border:2px solid var(--ink);background:transparent;transition:transform .12s ease,background .12s ease}
+.cue.on{background:var(--hot);border-color:var(--hot);transform:scale(1.35)}
+.arrow{font:400 70px/1 var(--display);color:var(--hot);position:absolute}
+.prompt{text-align:center;font:400 22px/1.3 var(--display);margin:0;min-height:30px}
+.bar{height:3px;background:var(--track);overflow:hidden;margin-top:16px}
+.bar span{display:block;height:100%;width:0;background:var(--hot);transition:width .2s linear}
+.link{background:none;border:0;color:var(--hot);padding:0;font-weight:700;cursor:pointer;text-decoration:underline}
+.link:hover{background:none;color:var(--hot)}
 </style>
 </head>
 <body>
 <div class="wrap">
+  <header class="top"><a class="brand" href="/" aria-label="Blinkwise"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 21c8-9 24-9 32 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M4 21c8 8 24 8 32 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="20" cy="21" r="5.2" fill="var(--hot)"/><path d="M9 14.5 7 11M14.5 11.5 13.5 8M20 10.5V7M25.5 11.5 26.5 8M31 14.5 33 11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Blinkwise</a></header>
   <h1>Set up Blinkwise</h1>
   <p class="lead">Two minutes. Nothing is recorded.</p>
   <div class="steps"><span id="s1" class="on"></span><span id="s2"></span><span id="s3"></span></div>
@@ -310,6 +293,7 @@ $("calSave").onclick = async () => { await act("calibrate_save"); leaveCal(); };
 $("calReset").onclick = async () => { await act("calibrate_reset"); $("calPrompt").textContent = "Back to the default settings."; $("calReset").hidden = true; };
 $("calCancel").onclick = async () => { await act("calibrate_cancel"); leaveCal(); };
 function leaveCal(){ calRunning = false; if (calFrom === 0) location.href = "/"; else show(calFrom); }
+window.addEventListener("hashchange", () => { if (location.hash === "#calibrate") location.reload(); });
 if (location.hash === "#calibrate"){
   calFrom = 0; document.querySelector(".steps").hidden = true;
   document.querySelector("h1").textContent = "Blink detection"; document.querySelector(".lead").hidden = true;

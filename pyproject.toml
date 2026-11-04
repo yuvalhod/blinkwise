@@ -42,7 +42,7 @@ Homepage = "https://github.com/blinkwise/blinkwise"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"blinkwise.ui" = ["static/*.html"]
+"blinkwise.ui" = ["static/*.html", "static/*.css", "static/*.txt", "static/fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

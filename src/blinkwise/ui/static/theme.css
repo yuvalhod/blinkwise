@@ -1,0 +1,94 @@
+/* Blinkwise design system: "paper and ink".
+   Warm paper, ink-dark type, hairline rules instead of boxes, one vermilion accent for
+   what needs attention and a deep green for "healthy". Typography: Fraunces (display,
+   numbers; SIL OFL, github.com/undercasetype/Fraunces) and Atkinson Hyperlegible (text;
+   SIL OFL, designed by the Braille Institute for low-vision readers). Both are bundled,
+   so pages load nothing from the internet. */
+
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/fraunces-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/fraunces-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Fraunces";font-style:italic;font-weight:400;font-display:swap;src:url(/fonts/fraunces-latin-400-italic.woff2) format("woff2")}
+/* Atkinson's zero is slashed (great in prose, odd in "10:00"): digits come from a plain
+   system face via unicode-range, everything else from Atkinson. */
+@font-face{font-family:"BW Digits";font-weight:400;src:local("Helvetica Neue"),local("HelveticaNeue"),local("Segoe UI"),local("Roboto"),local("Arial"),local("Liberation Sans"),local("DejaVu Sans");unicode-range:U+0030-0039}
+@font-face{font-family:"BW Digits";font-weight:700;src:local("Helvetica Neue Bold"),local("HelveticaNeue-Bold"),local("Segoe UI Bold"),local("Roboto Bold"),local("Arial Bold"),local("Arial-BoldMT"),local("Liberation Sans Bold"),local("DejaVu Sans Bold");unicode-range:U+0030-0039}
+@font-face{font-family:"Atkinson Hyperlegible";font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/atkinson-hyperlegible-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Atkinson Hyperlegible";font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/atkinson-hyperlegible-latin-700-normal.woff2) format("woff2")}
+
+:root{
+  --display:"Fraunces",Georgia,"Times New Roman",serif;
+  --text:"BW Digits","Atkinson Hyperlegible",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --paper:#f3eee5; --sheet:#fbf8f2; --sheet2:#ece6da; --rule:#d8cfbf; --rule2:#e6dfd2;
+  --ink:#1f1b16; --muted:#665e53; --faint:#9c9284;
+  --good:#2e6a4d; --good-soft:rgba(46,106,77,.11);
+  --hot:#d4471c; --hot-soft:rgba(212,71,28,.10);
+  --phone:#33508f; --both:#b97d10; --warn:#a85a12; --bad:#b8321f; --track:#e4ddcf;
+  --sel:#1f1b16; --on-sel:#fbf8f2;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#161411; --sheet:#1e1b17; --sheet2:#28241e; --rule:#3a342b; --rule2:#2c2822;
+    --ink:#f0e9dd; --muted:#aaa092; --faint:#71695d;
+    --good:#86c5a0; --good-soft:rgba(134,197,160,.13);
+    --hot:#ff8250; --hot-soft:rgba(255,130,80,.13);
+    --phone:#9cb2ea; --both:#e3ae4c; --warn:#e8a15a; --bad:#f07f67; --track:#2b2620;
+    --sel:#f0e9dd; --on-sel:#161411;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#161411; --sheet:#1e1b17; --sheet2:#28241e; --rule:#3a342b; --rule2:#2c2822;
+  --ink:#f0e9dd; --muted:#aaa092; --faint:#71695d;
+  --good:#86c5a0; --good-soft:rgba(134,197,160,.13);
+  --hot:#ff8250; --hot-soft:rgba(255,130,80,.13);
+  --phone:#9cb2ea; --both:#e3ae4c; --warn:#e8a15a; --bad:#f07f67; --track:#2b2620;
+  --sel:#f0e9dd; --on-sel:#161411;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{overflow-x:clip}
+body{margin:0;min-height:100vh;background:var(--paper);color:var(--ink);
+  font:15px/1.5 var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+/* faint paper grain (an inline SVG noise tile, so nothing is fetched) */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.35;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.45  0 0 0 0 0.38  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+:root[data-theme="dark"] body::before{mix-blend-mode:screen;opacity:.18}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) body::before{mix-blend-mode:screen;opacity:.18}}
+body>*{position:relative;z-index:1}
+
+h1,h2,h3,.display{font-family:var(--display);font-weight:400;letter-spacing:-.01em;margin:0}
+.num{font-variant-numeric:tabular-nums lining-nums}
+a{color:inherit;text-decoration-color:var(--rule);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--hot)}
+.i{width:18px;height:18px;flex:none}
+
+/* wordmark: the menu-bar eye, drawn in ink with a vermilion iris */
+.brand{display:flex;align-items:center;gap:10px;font:italic 400 22px/1 var(--display);letter-spacing:-.02em;color:var(--ink);text-decoration:none}
+.brand svg{width:30px;height:30px}
+
+/* small caps labels with a hairline running out to the right */
+.kicker{display:flex;align-items:center;gap:12px;font:700 11px/1 var(--text);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+.kicker::after{content:"";flex:1;height:1px;background:var(--rule)}
+.kicker .n{font:italic 400 13px/1 var(--display);letter-spacing:0;text-transform:none;color:var(--hot)}
+
+button,.btn{font:700 13.5px/1 var(--text);letter-spacing:.01em;color:var(--ink);background:transparent;border:1px solid var(--ink);
+  border-radius:999px;padding:10px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+  transition:background .15s,color .15s}
+button:hover,.btn:hover{background:var(--ink);color:var(--paper)}
+button:disabled{opacity:.4;cursor:default}
+button:disabled:hover{background:transparent;color:var(--ink)}
+button.primary,.btn.primary{background:var(--ink);color:var(--paper)}
+button.primary:hover,.btn.primary:hover{background:var(--hot);border-color:var(--hot);color:#fff}
+button.ghost,.btn.ghost{border-color:transparent;padding:8px 10px}
+button.ghost:hover{background:var(--sheet2);color:var(--ink)}
+input,select{font:inherit;color:var(--ink);background:var(--sheet);border:1px solid var(--rule);border-radius:4px;padding:9px 11px}
+input:focus,select:focus,button:focus-visible,a:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
+
+.chip{display:inline-block;font:700 11px/1 var(--text);letter-spacing:.08em;text-transform:uppercase;padding:5px 8px;border-radius:3px;border:1px solid currentColor}
+.ok{color:var(--good)}.warnc{color:var(--warn)}.badc{color:var(--bad)}
+.muted{color:var(--muted)}.faint{color:var(--faint)}
+::selection{background:var(--hot);color:#fff}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}

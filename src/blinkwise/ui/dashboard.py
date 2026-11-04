@@ -29,6 +29,22 @@ def _static(name: str) -> str:
     return resources.files("blinkwise.ui").joinpath(f"static/{name}").read_text(encoding="utf-8")
 
 
+FONTS = ("fraunces-latin-400-normal.woff2", "fraunces-latin-600-normal.woff2",
+         "fraunces-latin-400-italic.woff2", "atkinson-hyperlegible-latin-400-normal.woff2",
+         "atkinson-hyperlegible-latin-700-normal.woff2")
+
+
+def asset(path: str):
+    """(bytes, content type) for the shared stylesheet and bundled fonts, else None.
+    Only these exact names are served (no path handling of user input)."""
+    if path == "/theme.css":
+        return _static("theme.css").encode(), "text/css; charset=utf-8"
+    name = path[len("/fonts/"):] if path.startswith("/fonts/") else None
+    if name in FONTS:
+        return resources.files("blinkwise.ui").joinpath(f"static/fonts/{name}").read_bytes(), "font/woff2"
+    return None
+
+
 def _index_html() -> str:
     return _static("index.html")
 
@@ -119,6 +135,9 @@ class DashboardServer:
                 if u.path in ("/", "/index.html"):
                     html = page.replace("__BLINKWISE_TOKEN__", server.token)
                     return self._send(200, html.encode(), "text/html; charset=utf-8")
+                a = asset(u.path)
+                if a is not None:
+                    return self._send(200, a[0], a[1])
                 if u.path == "/setup":
                     html = setup_page.replace("__BLINKWISE_TOKEN__", server.token)
                     return self._send(200, html.encode(), "text/html; charset=utf-8")
