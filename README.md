@@ -133,7 +133,17 @@ Robustness on real pixels (held-out video, degraded on purpose):
 
 Full matrix of conditions, head angles and what the app does in each: [docs/LIMITS.md](docs/LIMITS.md). In a very dark room, blinks get missed. Blinkwise doesn't invent any; it says it can't see well and asks for more light. Real-video tests use Intel's public [sample videos](https://github.com/intel-iot-devkit/sample-videos). More labelled real-world data is the most valuable contribution you can make (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
-Performance: about 80 fps of processing on a laptop CPU. At the default 24 fps cap that's well under half a core, and it drops to 2 fps when nobody is in front of the camera.
+### Power use
+
+Blinkwise is built to stay out of your computer's way. The face model costs the same for every frame, so the number of frames is the power budget:
+
+* **15 frames a second** while you're at the screen. Blink counting is as accurate at 12-15 fps as at 30 (simulated users and 12 fps real video). For one minute in every five it runs at 24 fps to measure full vs. partial blinks; that sampled share stays within a few points of the truth.
+* **Slows down when there's nothing to see:** 6 fps when your eyes are out of view, 4 fps when you've stepped away, 2 fps after a minute.
+* **640x360 camera frames**, switching to 1280x720 only if your face is small in the image.
+* **One-face tracking**, with a multi-face check every 5 seconds to keep bystanders out of your numbers.
+* **12 fps on battery** (battery saver), and an optional mode that turns the camera off 4 minutes in every 5.
+
+Measured on the same input on a slow cloud CPU, the whole app went from 59% of one core to about 36% on average (32% at 15 fps). A modern laptop runs the face model several times faster, so expect a fraction of that. The dashboard shows Blinkwise's own CPU use live, counted the way Activity Monitor and Task Manager count it. Settings > Camera > Performance > Max accuracy runs at 24 fps all the time.
 
 ## Privacy
 

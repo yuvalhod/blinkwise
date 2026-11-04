@@ -430,6 +430,7 @@ function renderEnv(d){
     ["Tracking", `<span class="chip ${qc}" title="${esc((q.reasons||[]).join("; "))}">${esc(q.level)}</span>`],
     ["Distance", d.distance_cm == null ? "--" : `<span class="num ${d.distance_cm < 50 ? "warnc" : ""}">${d.distance_cm} cm</span>`],
     ["Screens in use", `<span class="num">${(d.zones || []).length || "--"}</span>`],
+    ["Blinkwise CPU", d.cpu_pct == null ? "--" : `<span class="num" title="Like Activity Monitor: 100% is one core. ${d.fps_cap ? "Now " + Math.round(d.fps_cap) + " frames a second." : ""}">${d.cpu_pct}%</span>`],
     ["Posture", d.posture == null ? "--" : `<span class="${d.posture === "Good" ? "ok" : "warnc"}">${esc(d.posture)}</span>`],
     ["Drowsiness", d.perclos_5m == null ? "--" : `<span class="num ${d.perclos_5m >= .15 ? "badc" : ""}">${(d.perclos_5m*100).toFixed(0)}%</span>`],
   ];
@@ -476,6 +477,7 @@ const SECTIONS = [
     ["during_calls", "In video calls", "select", [["quiet","Stay quiet"],["pause","Turn camera off"],["off","No change"]]],
     ["battery_saver", "Battery saver", "select", [["auto","On battery"],["always","Always"],["off","Off"]]],
     ["sampling", "Camera", "select", [["continuous","Always on"],["burst","1 min in every 5"]]],
+    ["performance", "Performance", "select", [["efficient","Efficient"],["max","Max accuracy"]]],
     ["check_updates", "Check for updates daily", "switch"],
     ["blink_overrides", "Blink detection", "link", "/setup#calibrate"]]]];
 

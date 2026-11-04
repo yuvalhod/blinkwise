@@ -139,7 +139,8 @@ def cmd_analyze(args) -> int:
 
     s = Settings.load()
     src = FrameSource(args.video)
-    tracker = FaceTracker(ensure_model(data_dir()), s.camera_hfov_deg, s.focal_px)
+    tracker = FaceTracker(ensure_model(data_dir()), s.camera_hfov_deg, s.focal_px,
+                          focal_px_width=s.focal_px_width)
     engine = Engine(s, monitors=None)
     blinks, suggestions, frames, faces = [], [], 0, 0
     t0 = time.time()
@@ -222,6 +223,7 @@ def cmd_calibrate(args) -> int:
     s = Settings.load()
     tracker = FaceTracker(ensure_model(data_dir()), s.camera_hfov_deg)
     src = FrameSource(s.camera)
+    width = src.size[0]
     print(f"Sit still with your eyes {args.distance_cm:g} cm from the camera and look at it...")
     samples, end = [], time.monotonic() + args.seconds
     while time.monotonic() < end:
@@ -238,6 +240,7 @@ def cmd_calibrate(args) -> int:
         return 1
     iris = statistics.median(samples)
     s.focal_px = round(iris * args.distance_cm / 1.17, 1)
+    s.focal_px_width = width
     s.save()
     print(f"Calibrated: focal length {s.focal_px} px (from {len(samples)} frames). Saved.")
     return 0
@@ -250,7 +253,8 @@ def cmd_selftest(args) -> int:
 
     s = Settings.load()
     source = args.camera if args.camera is not None else s.camera
-    tracker = FaceTracker(ensure_model(data_dir()), s.camera_hfov_deg, s.focal_px)
+    tracker = FaceTracker(ensure_model(data_dir()), s.camera_hfov_deg, s.focal_px,
+                          focal_px_width=s.focal_px_width)
     src = FrameSource(source, max_fps=30)
     print(f"Blinkwise self-test ({total_seconds():.0f} s). Sit as you normally do and follow the prompts.\n")
 

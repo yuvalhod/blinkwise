@@ -112,3 +112,55 @@ def test_busy_camera_keeps_app_alive(tmp_path, monkeypatch):
     assert app.error is None and "Could not open camera" in snap["camera_error"]
     assert build_menu(snap, blink_cue="subtle", autostart=None)[0].text.endswith("retrying")
     app.history.close()
+
+
+def test_efficient_frame_rate_policy(tmp_path):
+    from blinkwise import app as app_mod
+    app = _app(tmp_path, system.SystemState(on_battery=False))
+    t0 = app._burst_anchor
+    assert app.fps_cap(t0 + 10) == 24                       # full-rate minute (completeness)
+    assert app.fps_cap(t0 + 100) == app_mod.EFFICIENT_FPS   # the other 4 minutes
+    assert app.fps_cap(t0 + 310) == 24
+    avg = sum(app.fps_cap(t0 + s) for s in range(300)) / 300
+    assert avg < 17                                         # vs 24 before: ~30% fewer frames
+    # Nothing to measure -> slow down.
+    assert app.activity_fps(0, 0, t0 + 100) == 15
+    assert app.activity_fps(0, 8, t0 + 100) == app_mod.EYES_LOST_FPS
+    assert app.activity_fps(20, 20, t0 + 100) == app_mod.AWAY_FPS
+    assert app.activity_fps(120, 120, t0 + 100) == app_mod.IDLE_FPS
+    app.s.performance = "max"
+    assert app.fps_cap(t0 + 100) == 24
+    app.commands.put("calibrate")
+    app._drain_commands()
+    app.s.performance = "efficient"
+    assert app.fps_cap(t0 + 100) == 24                      # calibration gets every frame
+
+
+def test_commands_are_handled_while_the_camera_is_off(tmp_path, monkeypatch):
+    """Settings changed while paused still apply (they used to wait for the camera)."""
+    import threading
+
+    import blinkwise.vision.camera as cam
+    import blinkwise.vision.tracker as trk
+
+    class Tracker:
+        def __init__(self, *a, **k):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(trk, "FaceTracker", Tracker)
+    monkeypatch.setattr(trk, "ensure_model", lambda d: "model")
+    monkeypatch.setattr(cam, "FrameSource", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    app = App(Settings(), ui=False, dashboard=False, tray=False,
+              history_path=tmp_path / "h.sqlite", monitors=1, probe=system.SystemState)
+    app.pause()
+    t = threading.Thread(target=app._worker_main)
+    t.start()
+    app._on_settings({"micro_break_minutes": 30})
+    time.sleep(0.6)
+    app.stop.set()
+    t.join(3)
+    assert app.engine.breaks.micro_s == 30 * 60 and app.commands.empty()
+    app.history.close()

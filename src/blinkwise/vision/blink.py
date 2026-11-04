@@ -93,7 +93,14 @@ class _Baseline:
         return self.buf[-1][0] - self.buf[0][0] if len(self.buf) > 1 else 0.0
 
     def value(self) -> float:
-        return float(np.quantile([v for _, v in self.buf], self.q)) if self.buf else 0.0
+        """Same as np.quantile(..., method="linear"), ~10x faster for these small windows."""
+        if not self.buf:
+            return 0.0
+        vals = sorted(v for _, v in self.buf)
+        pos = self.q * (len(vals) - 1)
+        lo = int(pos)
+        hi = min(lo + 1, len(vals) - 1)
+        return float(vals[lo] + (vals[hi] - vals[lo]) * (pos - lo))
 
     def clear(self) -> None:
         self.buf.clear()
@@ -114,6 +121,7 @@ class BlinkDetector:
         self._last_blink_end = -1e9
         self._pending: Deque[Blink] = deque()          # confirmed, not yet returned
         self._raw3: Deque[float] = deque(maxlen=3)     # for median-of-3 smoothing
+        self._smooth = False
         self._diffs: Deque[Tuple[float, float]] = deque()  # (t, |d openness|) for noise
         self._prev_o: Optional[float] = None
         self._vis_r: Deque[Tuple[float, float]] = deque()
@@ -168,9 +176,16 @@ class BlinkDetector:
         o = self._openness(f)
         self.openness = o
         self._track_noise(f.t, o)
-        if self.fps >= p.smooth_min_fps:
-            self._raw3.append(o)
-            o = sorted(self._raw3)[len(self._raw3) // 2]
+        # Median-of-3 at high frame rates. The buffer is always kept current, and switching
+        # has hysteresis: a frame-rate estimate wobbling around the threshold used to flip
+        # smoothing on with stale samples in the buffer, creating one-frame fake dips.
+        self._raw3.append(o)
+        if self.fps >= p.smooth_min_fps - 0.5:
+            self._smooth = True
+        elif self.fps < p.smooth_min_fps - 3.0:
+            self._smooth = False
+        if self._smooth and len(self._raw3) == 3:
+            o = sorted(self._raw3)[1]
         self._sig.append((f.t, o, f.pitch))
         self._evaluate(final=False)
         out = self._pending.popleft() if self._pending else None

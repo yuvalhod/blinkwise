@@ -65,6 +65,7 @@ EDITABLE = {
     "during_calls": ["quiet", "pause", "off"],
     "check_updates": [True, False],
     "sampling": ["continuous", "burst"],
+    "performance": ["efficient", "max"],
 }
 
 
@@ -75,9 +76,11 @@ class Settings:
     max_fps: float = 24.0                 # cap processing rate; 20+ fps enables blink-completeness analysis
     camera_hfov_deg: float = 60.0         # typical laptop webcam; refine with `blinkwise calibrate`
     focal_px: Optional[float] = None      # set by calibration, overrides camera_hfov_deg
+    focal_px_width: int = 1280            # ...measured at this image width
     camera_position: str = "top"          # "top" (above the main screen, the common case) or "bottom"
     battery_saver: str = "auto"           # "auto": 12 fps on battery | "always" | "off"
     sampling: str = "continuous"          # "burst": camera on 1 minute in every 5 (light mostly off)
+    performance: str = "efficient"        # "efficient": 15 fps + 1 min in 5 at full rate | "max"
     # In a video call: "quiet" (no pop-ups, keep measuring), "pause" (release the camera), "off".
     # Windows/Linux webcams are usually single-user, so there we hand the camera over.
     during_calls: str = field(default_factory=lambda: "quiet" if sys.platform == "darwin" else "pause")

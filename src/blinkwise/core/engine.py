@@ -78,6 +78,7 @@ class Engine:
         self._closed_run = 0.0
         self._hidden: Deque[Tuple[float, bool]] = deque()    # eyes-hidden flags, last 60 s
         self._med_cache: Optional[Tuple[float, tuple]] = None
+        self._low_cache: Optional[Tuple[float, bool]] = None
         self._continuous_s = 0.0      # screen time since the last real (2 min+) break
         self._away_run = 0.0
         self._down_now = False
@@ -309,8 +310,13 @@ class Engine:
         self._p80_run = 0.0
 
     def _low_blink(self) -> bool:
-        st = self.stats.window(self._last_t or 0.0, 600, min_observed_s=180)
-        return st.rate is not None and st.rate < self.s.low_blink_rate
+        t = self._last_t or 0.0
+        if self._low_cache is not None and t - self._low_cache[0] < 1.0:   # a 10-minute rate
+            return self._low_cache[1]
+        st = self.stats.window(t, 600, min_observed_s=180)
+        low = st.rate is not None and st.rate < self.s.low_blink_rate
+        self._low_cache = (t, low)
+        return low
 
     def _track_recent(self, t: float, f: FrameFeatures, attending: bool) -> None:
         # Slow-changing values: twice a second is plenty for 2-5 minute medians, and keeps

@@ -29,9 +29,21 @@ from .ui import notify as native
 
 log = logging.getLogger(__name__)
 
-IDLE_AFTER_S = 60.0   # no face this long -> low-power polling
+# Frame-rate policy. Processing cost is per frame, so frames are the power budget.
+# Blink counting is as accurate at 12-15 fps as at 30 (scripts/eval_blinks.py and the
+# 12 fps real-video tests); only full-vs-partial blink classification needs 20+ fps, and
+# a 1-minute sample every 5 minutes estimates that share just as well.
+EFFICIENT_FPS = 15.0
+HIGH_RATE_EVERY_S = 300.0   # efficient mode: full rate for 1 minute in every 5...
+HIGH_RATE_FOR_S = 60.0      # ...to measure blink completeness
+BATTERY_FPS = 12.0          # battery saver: no full-rate minutes
+EYES_LOST_FPS = 6.0         # face visible but eyes unusable (turned away, hidden) for 5 s
+AWAY_FPS = 4.0              # nobody in view for 10 s...
+IDLE_AFTER_S = 60.0         # ...and for a minute
 IDLE_FPS = 2.0
-BATTERY_FPS = 12.0    # battery saver: half the CPU; blink completeness needs 20 fps so is skipped
+LOW_RES = (640, 360)        # enough for faces at normal distance (validated on 768x432 video)
+HIGH_RES = (1280, 720)      # used when your face is small in the image (far from the camera)
+SMALL_FACE_PX = 100.0
 SYSTEM_POLL_S = 5.0   # how often to check battery and video calls
 CAMERA_RETRY_S = 5.0
 BURST_ON_S = 60.0     # burst sampling: camera on for 1 minute...
@@ -75,6 +87,9 @@ class App:
         self._probe = probe
         self.sys_state = system.SystemState()
         self.camera_error: Optional[str] = None
+        self.fps_now: Optional[float] = None
+        self._cpu_mark = (time.monotonic(), time.process_time())
+        self.cpu_pct: Optional[float] = None
         self.update_info: Optional[Dict[str, str]] = None
         self._updates = None
         self.calib = None                    # calibration.Session while one is running/unsaved
@@ -169,10 +184,13 @@ class App:
         from .vision.camera import FrameSource
         from .vision.tracker import FaceTracker, ensure_model
         model = ensure_model(data_dir())
-        tracker = FaceTracker(model, self.s.camera_hfov_deg, self.s.focal_px)
+        tracker = FaceTracker(model, self.s.camera_hfov_deg, self.s.focal_px,
+                              focal_px_width=self.s.focal_px_width)
         self._wall_offset = time.time() - time.monotonic()
         src = None
-        last_face = time.monotonic()
+        last_face = last_eyes = time.monotonic()
+        res = LOW_RES
+        small: list = []                     # recent face widths, to pick the resolution
         retry_at = 0.0
         warned = False
         try:
@@ -183,6 +201,7 @@ class App:
                         src = None
                     if self.burst_resting() and not self.paused.is_set():
                         self._step_carry()
+                    self._drain_commands()
                     self._publish()
                     time.sleep(0.2)
                     continue
@@ -193,7 +212,8 @@ class App:
                         time.sleep(0.2)
                         continue
                     try:
-                        src = FrameSource(self.s.camera, max_fps=self.fps_cap(), realtime=True)
+                        src = FrameSource(self.s.camera, width=res[0], height=res[1],
+                                          max_fps=self.fps_cap(), realtime=True)
                         self.camera_error = None
                     except RuntimeError as e:
                         # Camera busy (another app has it) or not permitted: keep running and retry.
@@ -203,7 +223,9 @@ class App:
                             log.warning("%s Retrying every %.0f s.", e, CAMERA_RETRY_S)
                             warned = True
                         continue
-                src.max_fps = self.fps_cap()
+                now = time.monotonic()
+                src.max_fps = self.activity_fps(now - last_face, now - last_eyes)
+                self.fps_now = src.max_fps
                 item = src.read()
                 if item is None:
                     time.sleep(0.05)
@@ -213,9 +235,18 @@ class App:
                 self._carry = f
                 if f.face:
                     last_face = t
+                    small.append(f.face_px or 0.0)
+                    del small[:-300]
                 self._step(f)
-                if t - last_face > IDLE_AFTER_S:
-                    time.sleep(1.0 / IDLE_FPS)   # nobody there: save CPU/battery
+                if self.engine.detector.openness is not None:
+                    last_eyes = t
+                # Far from the camera: switch to the higher resolution once (costs ~10% more).
+                if res == LOW_RES and len(small) >= 100 and \
+                        sorted(small)[len(small) // 2] < SMALL_FACE_PX * src.size[0] / 640:
+                    log.info("face is small in the image; using %dx%d", *HIGH_RES)
+                    res = HIGH_RES
+                    src.release()
+                    src = None
         finally:
             if src is not None:
                 src.release()
@@ -238,8 +269,17 @@ class App:
             self.history.record(ev, self._wall_offset + getattr(ev, "t", f_t(self.engine)))
         self.events.put(ev)
 
+    def _measure_cpu(self) -> None:
+        """This process's CPU use, as Activity Monitor / Task Manager show it (100% = 1 core)."""
+        wall, cpu = time.monotonic(), time.process_time()
+        w0, c0 = self._cpu_mark
+        if wall - w0 >= 5.0:
+            self.cpu_pct = round(100.0 * (cpu - c0) / (wall - w0), 1)
+            self._cpu_mark = (wall, cpu)
+
     def _publish(self) -> None:
         self._check_auto_resume()
+        self._measure_cpu()
         snap = self.engine.snapshot()
         left = None
         if self.paused.is_set() and self._paused_until:
@@ -252,7 +292,8 @@ class App:
                                  if self._manual_quiet else None),
                     in_call=self.sys_state.call, call_mode=self.s.during_calls,
                     on_battery=self.sys_state.on_battery, battery_saver=self.battery_saving(),
-                    fps_cap=self.fps_cap(), camera_error=self.camera_error,
+                    fps_cap=self.fps_now if self.fps_now is not None else self.fps_cap(),
+                    camera_error=self.camera_error, cpu_pct=self.cpu_pct,
                     update=self.update_info if self.s.check_updates else None,
                     calibration=self.calib.state() if self.calib is not None else None,
                     calibrated=bool(self.s.blink_overrides),
@@ -382,8 +423,28 @@ class App:
         mode = self.s.battery_saver
         return mode == "always" or (mode == "auto" and bool(self.sys_state.on_battery))
 
-    def fps_cap(self) -> float:
-        return min(self.s.max_fps, BATTERY_FPS) if self.battery_saving() else self.s.max_fps
+    def fps_cap(self, now: Optional[float] = None) -> float:
+        """Frame rate while you're at the screen."""
+        full = self.s.max_fps
+        if self.calib is not None and not self.calib.done:
+            return full                                  # calibration wants every frame
+        if self.battery_saving():
+            return min(full, BATTERY_FPS)
+        if self.s.performance == "max":
+            return full
+        phase = ((now or time.monotonic()) - self._burst_anchor) % HIGH_RATE_EVERY_S
+        return full if phase < HIGH_RATE_FOR_S else min(full, EFFICIENT_FPS)
+
+    def activity_fps(self, since_face: float, since_eyes: float, now: Optional[float] = None) -> float:
+        """Slow down when there's nothing to measure."""
+        cap = self.fps_cap(now)
+        if since_face > IDLE_AFTER_S:
+            return min(cap, IDLE_FPS)
+        if since_face > 10.0:
+            return min(cap, AWAY_FPS)
+        if since_eyes > 5.0:
+            return min(cap, EYES_LOST_FPS)
+        return cap
 
     @property
     def call_active(self) -> bool:
