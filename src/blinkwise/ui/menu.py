@@ -66,11 +66,16 @@ def duration(seconds: float) -> str:
 
 
 def status_title(snap: Dict[str, Any]) -> str:
+    call, mode = snap.get("in_call"), snap.get("call_mode", "quiet")
+    if call and mode != "off" and not snap.get("paused"):
+        return "In a call - camera off" if mode == "pause" else "In a call - quiet"
     if snap.get("quiet_for_s") and not snap.get("paused"):
         return f"Quiet ({duration(snap['quiet_for_s'])} left)"
     if snap.get("paused"):
         until = snap.get("paused_for_s")
         return "Paused - camera off" + (f" ({duration(until)} left)" if until else "")
+    if snap.get("camera_error"):
+        return "Camera unavailable - retrying"
     if not snap.get("running", True):
         return "Starting..."
     if (snap.get("quality") or {}).get("level") == "poor":

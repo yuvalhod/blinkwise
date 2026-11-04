@@ -19,6 +19,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from . import system
 from .config import Settings, data_dir
 from .core import summary
 from .core.engine import Engine
@@ -30,13 +31,16 @@ log = logging.getLogger(__name__)
 
 IDLE_AFTER_S = 60.0   # no face this long -> low-power polling
 IDLE_FPS = 2.0
+BATTERY_FPS = 12.0    # battery saver: half the CPU; blink completeness needs 20 fps so is skipped
+SYSTEM_POLL_S = 5.0   # how often to check battery and video calls
+CAMERA_RETRY_S = 5.0
 
 
 class App:
     def __init__(self, settings: Settings, *, demo: bool = False, demo_speed: float = 1.0,
                  ui: bool = True, dashboard: bool = True, open_browser: bool = False,
                  history_path: Optional[Path] = None, monitors: Optional[int] = -1,
-                 tray: bool = True):
+                 tray: bool = True, probe=system.probe):
         self.s = settings
         self.demo = demo
         self.demo_speed = max(0.1, demo_speed)
@@ -65,6 +69,9 @@ class App:
         self._summary_check = 0.0
         self._today: Dict[str, Any] = {}
         self._today_at = 0.0
+        self._probe = probe
+        self.sys_state = system.SystemState()
+        self.camera_error: Optional[str] = None
 
     # ----------------------------------------------------------------- public
     def run(self) -> None:
@@ -81,6 +88,8 @@ class App:
                 webbrowser.open(url)
         worker = threading.Thread(target=self._worker_main, name="vision", daemon=True)
         worker.start()
+        if not self.demo:
+            threading.Thread(target=self._system_main, name="system", daemon=True).start()
         if sys.platform != "darwin":
             self._start_tray()                 # background thread next to Tk
         try:
@@ -153,18 +162,36 @@ class App:
         self._wall_offset = time.time() - time.monotonic()
         src = None
         last_face = time.monotonic()
+        retry_at = 0.0
+        warned = False
         try:
             while not self.stop.is_set():
-                if self.paused.is_set():
+                if not self.camera_wanted():
                     if src is not None:
-                        src.release()          # camera light goes off while paused
+                        src.release()          # camera light goes off while paused / in a call
                         src = None
                     self._drain_commands()
                     self._publish()
                     time.sleep(0.2)
                     continue
                 if src is None:
-                    src = FrameSource(self.s.camera, max_fps=self.s.max_fps, realtime=True)
+                    if time.monotonic() < retry_at:
+                        self._drain_commands()
+                        self._publish()
+                        time.sleep(0.2)
+                        continue
+                    try:
+                        src = FrameSource(self.s.camera, max_fps=self.fps_cap(), realtime=True)
+                        self.camera_error = None
+                    except RuntimeError as e:
+                        # Camera busy (another app has it) or not permitted: keep running and retry.
+                        self.camera_error = str(e)
+                        retry_at = time.monotonic() + CAMERA_RETRY_S
+                        if not warned:
+                            log.warning("%s Retrying every %.0f s.", e, CAMERA_RETRY_S)
+                            warned = True
+                        continue
+                src.max_fps = self.fps_cap()
                 item = src.read()
                 if item is None:
                     time.sleep(0.05)
@@ -206,7 +233,10 @@ class App:
                     today=self._today_stats(), blink_cue=self.s.blink_cue,
                     preset=self.s.preset,
                     quiet_for_s=(round(self._quiet_until - time.monotonic())
-                                 if self.quiet else None))
+                                 if self._manual_quiet else None),
+                    in_call=self.sys_state.call, call_mode=self.s.during_calls,
+                    on_battery=self.sys_state.on_battery, battery_saver=self.battery_saving(),
+                    fps_cap=self.fps_cap(), camera_error=self.camera_error)
         with self._snap_lock:
             self._snapshot = snap
 
@@ -269,6 +299,39 @@ class App:
         except Exception:
             log.debug("today stats unavailable", exc_info=True)
         return self._today
+
+    # ------------------------------------------------- battery and video calls
+    def _system_main(self) -> None:
+        while not self.stop.is_set():
+            self.poll_system()
+            self.stop.wait(SYSTEM_POLL_S)
+
+    def poll_system(self) -> None:
+        try:
+            state = self._probe()
+        except Exception:
+            log.debug("system probe failed", exc_info=True)
+            return
+        if state.call != self.sys_state.call:
+            log.info("video call %s", f"started ({state.call})" if state.call else "ended")
+            self._publish_soon()
+        self.sys_state = state
+
+    def battery_saving(self) -> bool:
+        mode = self.s.battery_saver
+        return mode == "always" or (mode == "auto" and bool(self.sys_state.on_battery))
+
+    def fps_cap(self) -> float:
+        return min(self.s.max_fps, BATTERY_FPS) if self.battery_saving() else self.s.max_fps
+
+    @property
+    def call_active(self) -> bool:
+        return self.sys_state.call is not None and self.s.during_calls != "off"
+
+    def camera_wanted(self) -> bool:
+        if self.paused.is_set():
+            return False
+        return not (self.call_active and self.s.during_calls == "pause")
 
     def pause(self, minutes: Optional[float] = None) -> None:
         self._paused_until = time.monotonic() + minutes * 60 if minutes else None
@@ -449,8 +512,13 @@ class App:
 
     # ------------------------------------------------------------- quiet mode
     @property
-    def quiet(self) -> bool:
+    def _manual_quiet(self) -> bool:
         return self._quiet_until is not None and time.monotonic() < self._quiet_until
+
+    @property
+    def quiet(self) -> bool:
+        """No pop-ups: chosen from the menu, or automatically during a video call."""
+        return self._manual_quiet or self.call_active
 
     def set_quiet(self, minutes: Optional[float]) -> None:
         self._quiet_until = time.monotonic() + minutes * 60 if minutes else None

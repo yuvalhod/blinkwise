@@ -422,7 +422,10 @@ const SECTIONS = [
   ["Notifications", [
     ["notify_suggestions", "Tips", "select", [["none","None"],["important","Important"],["all","All"]]],
     ["daily_summary", "Daily summary", "time"],
-    ["profile", "Profile", "select", [["adult","Adult"],["young","Child / teen"]]]]]];
+    ["profile", "Profile", "select", [["adult","Adult"],["young","Child / teen"]]]]],
+  ["Camera", [
+    ["during_calls", "In video calls", "select", [["quiet","Stay quiet"],["pause","Turn camera off"],["off","No change"]]],
+    ["battery_saver", "Battery saver", "select", [["auto","On battery"],["always","Always"],["off","Off"]]]]]];
 
 function renderSettings(st){
   $("presets").innerHTML = PRESETS.map(([k,t]) => `<button class="${st.preset===k ? "sel" : ""}" data-p="${k}" aria-pressed="${st.preset===k}">${t}</button>`).join("");

@@ -14,7 +14,7 @@ source build/venv/bin/activate
 python -m pip install -q --upgrade pip
 python -m pip install -q --no-deps mediapipe
 python -m pip install -q absl-py flatbuffers certifi numpy opencv-python-headless \
-    pillow pystray screeninfo pyinstaller
+    pillow pystray screeninfo psutil pyinstaller
 python -m pip install -q --no-deps -e .
 python - <<'PY'
 import hashlib, urllib.request, pathlib

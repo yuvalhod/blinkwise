@@ -25,6 +25,7 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 | **Posture and environment** | Estimates viewing distance from your iris size (about 11.7 mm in almost everyone), plus head tilt (a screen that's too high) and room lighting. |
 | **Coaching** | A handful of rules, each with a cooldown, a global anti-nag limit, and links to the research behind it. |
 | **Menu bar** | An eye with lashes: open while Blinkwise is watching, closed when the camera is off. A dot means a break is due, and when you've stared too long the eye blinks at you. Click it for today's status and a few actions: take a break, pause for 30 min or 1 h, open the dashboard, choose how you're reminded, start at login. |
+| **Battery and calls** | Runs at 12 fps on battery (about half the CPU). During a Zoom/FaceTime/Webex call (or when another app has the camera) it goes quiet, or hands the camera over on Windows and Linux where webcams can't be shared. If the camera is busy it waits and retries instead of quitting. |
 | **Tracking quality** | Grades frame rate, face size, lighting and jitter. When it can't see your eyes reliably it says so and pauses blink advice rather than give you wrong numbers. |
 | **Drowsiness** | PERCLOS (share of time the eyes are mostly closed), the standard camera measure of drowsiness. |
 | **Self-test** | `blinkwise selftest` checks in 30 seconds that detection works on *your* face and camera. |

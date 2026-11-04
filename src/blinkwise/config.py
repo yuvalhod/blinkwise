@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Union
 
@@ -61,6 +61,8 @@ EDITABLE = {
     "store_history": [True, False],
     "history_days": [7, 30, 90, 365],
     "setup_done": [True, False],
+    "battery_saver": ["auto", "always", "off"],
+    "during_calls": ["quiet", "pause", "off"],
 }
 
 
@@ -72,6 +74,10 @@ class Settings:
     camera_hfov_deg: float = 60.0         # typical laptop webcam; refine with `blinkwise calibrate`
     focal_px: Optional[float] = None      # set by calibration, overrides camera_hfov_deg
     camera_position: str = "top"          # "top" (above the main screen, the common case) or "bottom"
+    battery_saver: str = "auto"           # "auto": 12 fps on battery | "always" | "off"
+    # In a video call: "quiet" (no pop-ups, keep measuring), "pause" (release the camera), "off".
+    # Windows/Linux webcams are usually single-user, so there we hand the camera over.
+    during_calls: str = field(default_factory=lambda: "quiet" if sys.platform == "darwin" else "pause")
 
     # --- blink coaching ------------------------------------------------------
     stare_seconds: float = 10.0           # show a blink cue after this long without blinking
@@ -193,7 +199,6 @@ def _coerce(value, current):
         except ValueError:
             return value
     return value
-
 
 
 def _valid_hhmm(v: str) -> bool:

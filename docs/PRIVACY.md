@@ -63,3 +63,11 @@ network access is the one-time model download. This is not legal advice.
 ## Camera control
 
 "Pause camera" in the dashboard releases the device, so your camera's light turns off. Quitting the app (Ctrl+C) releases it too. When nobody is in front of the camera for a minute, Blinkwise drops to 2 frames per second.
+
+## Battery and video calls
+
+To save battery and stay out of the way in calls, Blinkwise checks every 5 seconds, on your
+device only: whether you're on battery, whether a meeting-only process is running (for
+example Zoom's `CptHost`), and on Windows/Linux whether another program has the webcam open.
+It doesn't record which apps you run; only "in a call: yes/no" is kept in memory, and it's
+never stored or sent. Set "In video calls" to "No change" in Settings to switch this off.

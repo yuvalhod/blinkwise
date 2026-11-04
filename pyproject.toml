@@ -25,6 +25,7 @@ dependencies = [
   "numpy>=1.23",
   "mediapipe>=0.10.14",
   "screeninfo>=0.8",
+  "psutil>=5.9",
 ]
 
 [project.optional-dependencies]
