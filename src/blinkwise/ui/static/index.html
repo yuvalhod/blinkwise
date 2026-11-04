@@ -56,6 +56,8 @@ body{margin:0;min-height:100vh;color:var(--ink);background:var(--bg);
 svg.i{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .banner{display:flex;gap:10px;align-items:center;padding:11px 14px;border-radius:14px;margin-bottom:14px;background:color-mix(in srgb,var(--warn) 12%,transparent);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);font-size:13.5px}
 .banner b{color:var(--warn)}
+.banner.info{background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:color-mix(in srgb,var(--accent) 28%,transparent)}
+.banner.info b{color:var(--ink)}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(12,1fr)}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:18px 20px;box-shadow:var(--shadow);backdrop-filter:blur(12px);min-width:0}
 .c4{grid-column:span 4}.c5{grid-column:span 5}.c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}
@@ -309,9 +311,18 @@ async function refreshLive(){
   renderScreenTime(d.today || {});
   renderEnv(d);
   renderInsights(d.suggestions || []);
-  const q = d.quality || {}, b = $("qbanner");
-  if (q.level === "poor" && !d.paused){ b.hidden = false; b.innerHTML = `<b>Can't see your eyes clearly.</b> <span>${esc((q.tips||[])[0] || "")}</span> <a class="btn" href="/setup" style="margin-left:auto">Fix</a>`; }
-  else b.hidden = true;
+  renderBanner(d);
+}
+
+function renderBanner(d){
+  const q = d.quality || {}, b = $("qbanner"), u = d.update;
+  let html = null, info = false;
+  if (d.camera_error && !d.paused) html = `<b>Camera unavailable.</b> <span>Another app may be using it. Retrying.</span>`;
+  else if (d.in_call && d.call_mode !== "off" && !d.paused){ info = true; html = `<b>In a call.</b> <span>${d.call_mode === "pause" ? "Camera handed over until it ends." : "Reminders are quiet until it ends."}</span>`; }
+  else if (q.level === "poor" && !d.paused) html = `<b>Can't see your eyes clearly.</b> <span>${esc((q.tips||[])[0] || "")}</span> <a class="btn" href="/setup" style="margin-left:auto">Fix</a>`;
+  else if (u && /^https:\/\/github\.com\//.test(u.url)){ info = true; html = `<b>Blinkwise ${esc(u.version)} is available.</b> <a class="btn" href="${esc(u.url)}" target="_blank" rel="noopener" style="margin-left:auto">Get it</a>`; }
+  b.hidden = html == null; b.classList.toggle("info", info);
+  if (html != null) b.innerHTML = html;
 }
 
 function renderScreenTime(t){
@@ -425,7 +436,8 @@ const SECTIONS = [
     ["profile", "Profile", "select", [["adult","Adult"],["young","Child / teen"]]]]],
   ["Camera", [
     ["during_calls", "In video calls", "select", [["quiet","Stay quiet"],["pause","Turn camera off"],["off","No change"]]],
-    ["battery_saver", "Battery saver", "select", [["auto","On battery"],["always","Always"],["off","Off"]]]]]];
+    ["battery_saver", "Battery saver", "select", [["auto","On battery"],["always","Always"],["off","Off"]]],
+    ["check_updates", "Check for updates daily", "switch"]]]];
 
 function renderSettings(st){
   $("presets").innerHTML = PRESETS.map(([k,t]) => `<button class="${st.preset===k ? "sel" : ""}" data-p="${k}" aria-pressed="${st.preset===k}">${t}</button>`).join("");

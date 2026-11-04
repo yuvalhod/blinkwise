@@ -72,6 +72,8 @@ class App:
         self._probe = probe
         self.sys_state = system.SystemState()
         self.camera_error: Optional[str] = None
+        self.update_info: Optional[Dict[str, str]] = None
+        self._updates = None
 
     # ----------------------------------------------------------------- public
     def run(self) -> None:
@@ -236,7 +238,8 @@ class App:
                                  if self._manual_quiet else None),
                     in_call=self.sys_state.call, call_mode=self.s.during_calls,
                     on_battery=self.sys_state.on_battery, battery_saver=self.battery_saving(),
-                    fps_cap=self.fps_cap(), camera_error=self.camera_error)
+                    fps_cap=self.fps_cap(), camera_error=self.camera_error,
+                    update=self.update_info if self.s.check_updates else None)
         with self._snap_lock:
             self._snapshot = snap
 
@@ -304,7 +307,17 @@ class App:
     def _system_main(self) -> None:
         while not self.stop.is_set():
             self.poll_system()
+            self.check_updates()
             self.stop.wait(SYSTEM_POLL_S)
+
+    def check_updates(self) -> None:
+        if not self.s.check_updates:
+            self.update_info = None
+            return
+        if self._updates is None:
+            from .updates import UpdateChecker
+            self._updates = UpdateChecker(data_dir() / "update.json")
+        self.update_info = self._updates.maybe_check()
 
     def poll_system(self) -> None:
         try:
@@ -361,6 +374,9 @@ class App:
         elif action == "dashboard":
             if self.server is not None:
                 webbrowser.open(self.server.url)
+        elif action == "update":
+            if self.update_info:
+                webbrowser.open(self.update_info["url"])
         elif action == "setup":
             if self.server is not None:
                 webbrowser.open(self.server.url + "setup")

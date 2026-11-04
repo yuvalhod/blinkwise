@@ -138,6 +138,8 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
     items.append(Item(text="Fix camera setup..." if poor else "Check camera setup...", action="setup"))
     if autostart is not None:
         items.append(Item(text="Start at login", action="autostart", checked=autostart))
+    if snap.get("update"):
+        items.append(Item(text=f"Update available: {snap['update']['version']}...", action="update"))
     items.append(Item.sep())
     items.append(Item(text="Quit Blinkwise", action="quit"))
     return items

@@ -135,7 +135,7 @@ Performance: about 80 fps of processing on a laptop CPU. At the default 24 fps c
 
 * Camera frames are processed in memory and immediately discarded. They are never saved, logged or transmitted.
 * Only per-minute aggregates (blink counts, distance, break outcomes) are stored, in a local SQLite file you can delete with `blinkwise wipe`.
-* The only network access is a one-time 3.7 MB download of Google's MediaPipe face model, verified by SHA-256. You can provide the file yourself with `BLINKWISE_MODEL=/path/to/face_landmarker.task`.
+* Network access is limited to a one-time 3.7 MB download of Google's MediaPipe face model (verified by SHA-256; you can supply it with `BLINKWISE_MODEL=/path/to/face_landmarker.task`) and an anonymous daily check for a newer release, which you can turn off.
 * The dashboard listens on 127.0.0.1 only and rejects cross-site requests.
 * "Pause" in the dashboard releases the camera, so the camera light goes off.
 

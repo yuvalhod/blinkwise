@@ -63,6 +63,7 @@ EDITABLE = {
     "setup_done": [True, False],
     "battery_saver": ["auto", "always", "off"],
     "during_calls": ["quiet", "pause", "off"],
+    "check_updates": [True, False],
 }
 
 
@@ -110,6 +111,7 @@ class Settings:
     tray: bool = True                     # menu-bar / system-tray icon
     store_history: bool = True
     history_days: int = 90                # history older than this is deleted automatically
+    check_updates: bool = True            # once a day, anonymous; never downloads anything
 
     @classmethod
     def path(cls) -> Path:
