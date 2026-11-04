@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS breaks (
     ts INTEGER NOT NULL, kind TEXT NOT NULL, outcome TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS breaks_ts ON breaks(ts);
+CREATE TABLE IF NOT EXISTS checkins (   -- weekly "how do your eyes feel", 0 never .. 3 almost always
+    ts INTEGER NOT NULL, dry INTEGER NOT NULL, tired INTEGER NOT NULL, blurry INTEGER NOT NULL
+);
 """
 
 _COLS = ("ts", "observed_s", "blinks", "judged", "incomplete", "long_blinks", "max_stare_s",
@@ -114,12 +117,13 @@ class History:
         with self._lock:
             n = self._db.execute("DELETE FROM minutes WHERE ts < ?", (cutoff,)).rowcount
             n += self._db.execute("DELETE FROM breaks WHERE ts < ?", (cutoff,)).rowcount
+            n += self._db.execute("DELETE FROM checkins WHERE ts < ?", (cutoff,)).rowcount
             self._db.commit()
         return n
 
     def wipe(self) -> None:
         with self._lock:
-            for t in ("minutes", "breaks"):
+            for t in ("minutes", "breaks", "checkins"):
                 self._db.execute(f"DELETE FROM {t}")  # noqa: S608 (fixed table names)
             self._db.commit()
             self._db.execute("VACUUM")
@@ -132,7 +136,23 @@ class History:
             breaks = [dict(ts=t, kind=k, outcome=o) for t, k, o in
                       self._db.execute("SELECT ts, kind, outcome FROM breaks ORDER BY ts")]
         return {"format": "blinkwise-export", "version": SCHEMA_VERSION,
-                "exported_at": int(time.time()), "minutes": minutes, "breaks": breaks}
+                "exported_at": int(time.time()), "minutes": minutes, "breaks": breaks,
+                "checkins": self.checkins(days=100000)}
+
+    def add_checkin(self, dry: int, tired: int, blurry: int, now: Optional[float] = None) -> None:
+        vals = [int(v) for v in (dry, tired, blurry)]
+        if any(not 0 <= v <= 3 for v in vals):
+            raise ValueError("answers must be 0-3")
+        with self._lock:
+            self._db.execute("INSERT INTO checkins VALUES (?,?,?,?)", (int(now or time.time()), *vals))
+            self._db.commit()
+
+    def checkins(self, days: float = 120, now: Optional[float] = None) -> List[Dict[str, Any]]:
+        since = int((now or time.time()) - days * 86400)
+        with self._lock:
+            rows = self._db.execute("SELECT ts, dry, tired, blurry FROM checkins WHERE ts >= ? "
+                                    "ORDER BY ts", (since,)).fetchall()
+        return [dict(ts=t, dry=d, tired=ti, blurry=b) for t, d, ti, b in rows]
 
     # -- reads ----------------------------------------------------------------
     def daily(self, days: int = 14, now: Optional[float] = None) -> List[Dict[str, Any]]:
@@ -165,6 +185,7 @@ class History:
                 "multitask_minutes": int(multi or 0),            # both in the same minute
                 "device_switches": int(switches or 0),
                 "blinks": blinks or 0,
+                "observed_minutes": round(obs / 60, 1),
                 "blink_rate": round(blinks / obs * 60, 1) if obs >= 60 else None,
                 "incomplete_ratio": round(inc / judged, 3) if judged else None,
                 "long_blinks": lng or 0,

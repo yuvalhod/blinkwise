@@ -134,6 +134,8 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
         for key, label in STYLE_CHOICES] + ([Item.line("Custom")]
                                             if preset == "custom" else [])))
     items.append(Item(text="Open dashboard...", action="dashboard"))
+    if snap.get("checkin_due"):
+        items.append(Item(text="Weekly eye check-in...", action="checkin"))
     poor = (snap.get("quality") or {}).get("level") == "poor"
     items.append(Item(text="Fix camera setup..." if poor else "Check camera setup...", action="setup"))
     if autostart is not None:

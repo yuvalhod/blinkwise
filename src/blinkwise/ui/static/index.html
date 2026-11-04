@@ -106,6 +106,25 @@ details.row .src a{color:var(--accent);text-decoration:none}
 .daybar{width:100%;max-width:24px;border-radius:5px;background:var(--accent);min-height:2px}
 .daybar.ph{background:var(--phone)}
 .dayl{font-size:10px;color:var(--faint);margin-top:4px}
+.week{display:grid;grid-template-columns:1fr auto auto;gap:9px 16px;font-size:13.5px;align-items:center}
+.week .h{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+.week .k{color:var(--muted)}
+.week .v{font-weight:600;text-align:right}
+.week .p{color:var(--faint);text-align:right;min-width:64px}
+.tr{font-size:11px;font-weight:700;margin-left:6px}
+.tr.better{color:var(--accent)}.tr.worse{color:var(--warn)}
+.goal{margin-top:14px;padding:12px 14px;border-radius:14px;background:var(--accent-soft);font-size:13.5px}
+.goal b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
+.goal small{display:block;color:var(--muted);margin-top:4px}
+.q{margin:0 0 12px}
+.q p{margin:0 0 6px;font-weight:550}
+.seg.four{grid-template-columns:repeat(4,1fr)}
+.seg.four button{font-size:12px;padding:8px 4px}
+.advice{padding:12px 14px;border-radius:14px;background:var(--surface2);font-size:13.5px}
+.advice.doctor{background:color-mix(in srgb,var(--warn) 12%,transparent);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}
+.advice b{display:block;margin-bottom:3px}
+.advice span{color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:transparent;color:#05241c}
 .scrim{position:fixed;inset:0;background:rgba(5,9,16,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:2}
 .scrim.open{opacity:1;pointer-events:auto}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--bg);border-left:1px solid var(--border);transform:translateX(100%);visibility:hidden;transition:transform .22s ease,visibility 0s .22s;overflow-y:auto;padding:18px 18px 40px;z-index:3}
@@ -203,6 +222,16 @@ footer{margin-top:20px;color:var(--faint);font-size:12px;display:flex;gap:8px;al
       <div class="kv" id="env"></div>
     </section>
 
+    <section class="card c6" aria-label="This week" id="weekCard">
+      <p class="label">This week <span class="info" title="Daily averages over the last 7 days, compared with the 7 days before. Only on this computer; nothing is sent.">i</span></p>
+      <div id="week"><p class="empty">Your first weekly report appears after a day or two.</p></div>
+    </section>
+
+    <section class="card c6" aria-label="Eye check-in" id="checkin">
+      <p class="label">How your eyes feel <span class="info" title="Three questions once a week. Your answers stay on this computer. Not a diagnosis.">i</span></p>
+      <div id="ci"><p class="empty">A short weekly check-in appears here after a few days.</p></div>
+    </section>
+
     <section class="card c6" aria-label="Last 14 days">
       <p class="label">Last 14 days <span class="info" title="Screen time (green) and phone time (blue) per day. Hover a day for details.">i</span></p>
       <div id="days"><p class="empty">No history yet.</p></div>
@@ -224,7 +253,7 @@ footer{margin-top:20px;color:var(--faint);font-size:12px;display:flex;gap:8px;al
     <div class="set"><span>Download my data</span><a class="btn" href="/api/export" download>Export</a></div>
     <div class="set"><span class="danger">Delete all history</span><button class="btn" id="wipeBtn">Delete</button></div>
   </div>
-  <p class="hint">Only per-minute counts are kept, on this computer: blinks, distance, screen and phone time, breaks. Never images, video or face data.</p>
+  <p class="hint">Only per-minute counts are kept, on this computer: blinks, distance, screen and phone time, breaks, and your weekly check-in answers. Never images, video or face data.</p>
   <div class="group">About</div>
   <div class="panel">
     <div class="set"><span>Camera setup check</span><a class="btn" href="/setup">Open</a></div>
@@ -481,6 +510,39 @@ $("closeDrawer").onclick = $("scrim").onclick = () => drawer(false);
 document.addEventListener("keydown", e => { if (e.key === "Escape") drawer(false); });
 if (location.hash === "#settings") drawer(true);
 
+const TREND = {better: "&#9650;", worse: "&#9660;"};
+function fmtW(r, v){ if (v == null) return "--"; if (r.unit === "min") return hm(v); return `${v}${r.unit === "/min" ? "" : r.unit === "%" ? "%" : " " + r.unit}`; }
+let ciAns = {};
+function renderWeekly(w){
+  const r = w.report, c = w.checkin;
+  if (r && r.has_data){
+    const rows = r.rows.map(x => `<span class="k">${esc(x.label)}</span><span class="v num">${fmtW(x, x.this)}${x.trend ? `<span class="tr ${x.trend}" title="${x.trend} than last week">${TREND[x.trend]}</span>` : ""}</span><span class="p num">${fmtW(x, x.last)}</span>`).join("");
+    let lg = "";
+    if (r.last_goal && r.last_goal.key !== "keep" && r.last_goal_met != null) lg = `<small>Last week's goal: ${r.last_goal_met ? "met" : "not yet"}.</small>`;
+    $("week").innerHTML = `<div class="week"><span class="h">${r.days_this_week} day${r.days_this_week === 1 ? "" : "s"}</span><span class="h" style="text-align:right">This week</span><span class="h" style="text-align:right">Last</span>${rows}</div>
+      <div class="goal"><b>Goal for next week</b>${esc(r.goal.text)}${lg}</div>`;
+  }
+  if (!c) return;
+  if (c.due){
+    $("ci").innerHTML = `<p class="hint" style="margin:0 0 12px">In the past week, how often did you have:</p>` + c.questions.map(q =>
+      `<div class="q"><p>${esc(q.text)}</p><div class="seg four" role="radiogroup" aria-label="${esc(q.text)}">${c.answers.map((a, i) =>
+        `<button data-q="${q.key}" data-v="${i}" role="radio" aria-checked="${ciAns[q.key] === i}" class="${ciAns[q.key] === i ? "sel" : ""}">${esc(a)}</button>`).join("")}</div></div>`).join("") +
+      `<div style="display:flex;justify-content:flex-end"><button class="btn primary" id="ciSave" ${Object.keys(ciAns).length < 3 ? "disabled" : ""}>Save</button></div>`;
+    document.querySelectorAll("#ci [data-q]").forEach(b => b.onclick = () => { ciAns[b.dataset.q] = Number(b.dataset.v); renderWeekly(w); });
+    const sv = $("ciSave"); if (sv) sv.onclick = async () => {
+      const [ok, res] = await post("/api/checkin", ciAns);
+      if (ok){ ciAns = {}; renderWeekly(res); toast("Saved"); } else toast("Couldn't save");
+    };
+  } else if (c.last){
+    const a = c.advice || {}, days = Math.max(0, 7 - Math.floor((Date.now()/1000 - c.last.ts) / 86400));
+    const pts = (r && r.checkins) || [];
+    $("ci").innerHTML = `<div class="advice ${a.level === "doctor" ? "doctor" : ""}"><b>${esc(a.title || "")}</b><span>${esc(a.text || "")}</span></div>
+      <div class="week" style="margin-top:14px">${c.questions.map(q => `<span class="k">${esc(q.text)}</span><span class="v">${esc(c.answers[c.last[q.key]])}</span><span></span>`).join("")}</div>
+      <p class="hint">${pts.length > 1 ? `Score ${pts.map(p => p.total).join(" → ")} (of 9). ` : ""}Next check-in in ${days} day${days === 1 ? "" : "s"}.</p>`;
+  }
+}
+async function refreshWeekly(){ try { renderWeekly(await (await fetch("/api/weekly")).json()); } catch(e){} }
+
 async function loadScience(){
   try {
     const list = await (await fetch("/api/science")).json();
@@ -491,10 +553,11 @@ async function loadScience(){
 
 renderRing(null);
 loadScience().then(refreshLive);
-loadSettings(); refreshHistory(); refreshPatterns();
+loadSettings(); refreshHistory(); refreshPatterns(); refreshWeekly().then(() => { if (location.hash === "#checkin") $("checkin").scrollIntoView(); });
 setInterval(refreshLive, 1000);
 setInterval(refreshHistory, 30000);
 setInterval(refreshPatterns, 300000);
+setInterval(refreshWeekly, 600000);
 </script>
 </body>
 </html>

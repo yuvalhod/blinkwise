@@ -62,6 +62,10 @@ There is little direct research on multi-monitor eye strain. The advice Blinkwis
 
 **What Blinkwise does:** with `profile=young`, it adds a daily reminder about outdoor time.
 
+## 9. The weekly check-in
+
+Three questions, answered Never / Sometimes / Often / Almost always: dry or gritty eyes, tired or strained eyes, blurry vision after screen use. These are the three symptom groups that screen eye-strain questionnaires keep returning to (the OSDI for ocular surface symptoms; the CVS-Q for computer vision syndrome). The wording is ours and the questions are not a validated instrument, so the score is a personal trend, not a diagnosis. Blinkwise suggests an eye-care professional when one symptom is "almost always" present, or the total (0-9) is 6 or more two weeks in a row, because persistent symptoms can have causes no habit fixes (dry eye disease, an outdated prescription, binocular vision problems).
+
 ## Known limitations
 
 * Validated so far on one labelled real video plus simulations. More real-world labelled data (glasses, low light, darker skin tones, children) is needed and very welcome.

@@ -46,7 +46,7 @@ def test_minimal_columns_only_and_no_suggestion_log(tmp_path):
     cols = {r[1] for r in h._db.execute("PRAGMA table_info(minutes)")}
     assert not cols & {"pitch", "yaw", "luminance", "switches_per_min"}
     tables = {r[0] for r in h._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert tables == {"minutes", "breaks"}
+    assert tables == {"minutes", "breaks", "checkins"}
 
 
 def test_v1_database_is_migrated_and_scrubbed(tmp_path):

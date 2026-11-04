@@ -69,6 +69,7 @@ class App:
         self._summary_check = 0.0
         self._today: Dict[str, Any] = {}
         self._today_at = 0.0
+        self.checkin_due = False
         self._probe = probe
         self.sys_state = system.SystemState()
         self.camera_error: Optional[str] = None
@@ -245,7 +246,8 @@ class App:
                     fps_cap=self.fps_cap(), camera_error=self.camera_error,
                     update=self.update_info if self.s.check_updates else None,
                     calibration=self.calib.state() if self.calib is not None else None,
-                    calibrated=bool(self.s.blink_overrides))
+                    calibrated=bool(self.s.blink_overrides),
+                    checkin_due=self.checkin_due and not self.demo)
         with self._snap_lock:
             self._snapshot = snap
 
@@ -324,6 +326,10 @@ class App:
         try:
             days = self.history.daily(1)
             self._today = days[-1] if days else {}
+            from .core import weekly
+            week = self.history.daily(8)
+            used = sum(1 for d in week if (d.get("screen_minutes") or 0) >= 10)
+            self.checkin_due = weekly.checkin_due(self.history.checkins(), used)
         except Exception:
             log.debug("today stats unavailable", exc_info=True)
         return self._today
@@ -399,6 +405,9 @@ class App:
         elif action == "dashboard":
             if self.server is not None:
                 webbrowser.open(self.server.url)
+        elif action == "checkin":
+            if self.server is not None:
+                webbrowser.open(self.server.url + "#checkin")
         elif action == "update":
             if self.update_info:
                 webbrowser.open(self.update_info["url"])

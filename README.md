@@ -30,6 +30,7 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 | **Tracking quality** | Grades frame rate, face size, lighting and jitter. When it can't see your eyes reliably it says so and pauses blink advice rather than give you wrong numbers. |
 | **Drowsiness** | PERCLOS (share of time the eyes are mostly closed), the standard camera measure of drowsiness. |
 | **Self-test** | `blinkwise selftest` checks in 30 seconds that detection works on *your* face and camera. |
+| **Weekly report and check-in** | This week vs last: screen and phone time, blink rate, full blinks, breaks taken, distance, plus one gentle goal for next week. Once a week, three questions on how your eyes felt (our wording, inspired by the OSDI and CVS-Q questionnaires). If a symptom is there almost always, or stays high two weeks running, it suggests seeing an eye-care professional. View only: nothing is emailed or sent. |
 | **Dashboard** | A local web page with live numbers, today's blink rate, a top-down view of your screens, suggestions with sources, and 14-day history. |
 
 ![Overlays: blink cue, break card, suggestion](docs/img/overlays.png)

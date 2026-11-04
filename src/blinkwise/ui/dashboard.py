@@ -60,7 +60,7 @@ class DashboardServer:
         for port in range(self.port, self.port + 10):
             try:
                 self._httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
-                self.port = port
+                self.port = self._httpd.server_address[1]   # port 0: the OS picked one
                 break
             except OSError as e:
                 last_err = e
@@ -150,6 +150,8 @@ class DashboardServer:
                     self.end_headers()
                     self.wfile.write(body)
                     return
+                if u.path == "/api/weekly":
+                    return self._json(server.weekly())
                 if u.path == "/api/science":
                     return self._json([dataclasses.asdict(r) for r in REFERENCES.values()])
                 if u.path == "/api/settings":
@@ -175,6 +177,14 @@ class DashboardServer:
                         return self._json(dataclasses.asdict(server.on_settings(body)))
                     except (KeyError, ValueError, TypeError) as e:
                         return self._json({"error": str(e)}, 400)
+                if u.path == "/api/checkin":
+                    if server.history is None:
+                        return self._json({"error": "history is off"}, 400)
+                    try:
+                        server.history.add_checkin(*(body.get(k) for k in ("dry", "tired", "blurry")))
+                    except (TypeError, ValueError):
+                        return self._json({"error": "answers must be 0-3"}, 400)
+                    return self._json(server.weekly())
                 if u.path != "/api/action" or server.on_action is None:
                     return self._send(404, b"not found", "text/plain")
                 action = body.get("action")
@@ -183,6 +193,20 @@ class DashboardServer:
                 return self._json(server.on_action(action))
 
         return Handler
+
+    def weekly(self) -> Dict[str, Any]:
+        from ..core import weekly
+        if self.history is None:
+            return {"report": None, "checkin": None}
+        days = self.history.daily(15)
+        checkins = self.history.checkins()
+        used = sum(1 for d in days if (d.get("screen_minutes") or 0) >= 10)
+        return {"report": weekly.report(days, checkins),
+                "checkin": {"due": weekly.checkin_due(checkins, used),
+                            "questions": [{"key": k, "text": t} for k, t in weekly.QUESTIONS],
+                            "answers": list(weekly.ANSWERS),
+                            "advice": weekly.checkin_advice(checkins),
+                            "last": checkins[-1] if checkins else None}}
 
 
 def _default(o):
