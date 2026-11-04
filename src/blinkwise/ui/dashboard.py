@@ -39,13 +39,15 @@ class DashboardServer:
                  history=None,
                  on_action: Optional[Callable[[str], Dict[str, Any]]] = None,
                  get_settings: Optional[Callable[[], Any]] = None,
-                 on_settings: Optional[Callable[[Dict[str, Any]], Any]] = None):
+                 on_settings: Optional[Callable[[Dict[str, Any]], Any]] = None,
+                 family=None):
         self.port = port
         self.get_snapshot = get_snapshot
         self.history = history
         self.on_action = on_action
         self.get_settings = get_settings
         self.on_settings = on_settings
+        self.family = family          # object with get() and post(body), see app.FamilyControl
         self.token = secrets.token_urlsafe(24)
         self._httpd: Optional[ThreadingHTTPServer] = None
         self._thread: Optional[threading.Thread] = None
@@ -150,13 +152,15 @@ class DashboardServer:
                     self.end_headers()
                     self.wfile.write(body)
                     return
+                if u.path == "/api/family" and server.family is not None:
+                    return self._json(server.family.get())
                 if u.path == "/api/weekly":
                     return self._json(server.weekly())
                 if u.path == "/api/science":
                     return self._json([dataclasses.asdict(r) for r in REFERENCES.values()])
                 if u.path == "/api/settings":
                     s = server.get_settings() if server.get_settings else None
-                    return self._json(dataclasses.asdict(s) if s is not None else {})
+                    return self._json(s.public_dict() if s is not None else {})
                 return self._send(404, b"not found", "text/plain")
 
             def do_POST(self):  # noqa: N802
@@ -174,8 +178,17 @@ class DashboardServer:
                     return self._json({"error": "expected an object"}, 400)
                 if u.path == "/api/settings" and server.on_settings is not None:
                     try:
-                        return self._json(dataclasses.asdict(server.on_settings(body)))
+                        return self._json(server.on_settings(body).public_dict())
+                    except PermissionError:
+                        return self._json({"error": "Enter the parent PIN.", "pin_required": True}, 403)
                     except (KeyError, ValueError, TypeError) as e:
+                        return self._json({"error": str(e)}, 400)
+                if u.path == "/api/family" and server.family is not None:
+                    try:
+                        return self._json(server.family.post(body))
+                    except PermissionError:
+                        return self._json({"error": "Enter the parent PIN.", "pin_required": True}, 403)
+                    except ValueError as e:
                         return self._json({"error": str(e)}, 400)
                 if u.path == "/api/checkin":
                     if server.history is None:
@@ -190,6 +203,9 @@ class DashboardServer:
                 action = body.get("action")
                 if action not in ALLOWED_ACTIONS:
                     return self._json({"error": "unknown action"}, 400)
+                if action == "wipe" and server.family is not None and \
+                        not server.family.pin_ok(body.get("pin", "")):
+                    return self._json({"error": "Enter the parent PIN.", "pin_required": True}, 403)
                 return self._json(server.on_action(action))
 
         return Handler

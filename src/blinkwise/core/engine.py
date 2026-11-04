@@ -65,6 +65,7 @@ class Engine:
         self.breaks = BreakScheduler(self.s.micro_break_minutes, self.s.micro_break_seconds,
                                      self.s.long_break_minutes, self.s.long_break_seconds,
                                      self.s.adaptive_breaks)
+        self.breaks.kid = self.s.profile == "young"
         self.coach = Coach(self.s)
         self.posture = PostureTracker()
         self.monitors = connected_monitors() if monitors == -1 else monitors
@@ -193,6 +194,7 @@ class Engine:
         b.long_s = self.s.long_break_minutes * 60
         b.long_len = self.s.long_break_seconds
         b.adaptive = self.s.adaptive_breaks
+        b.kid = self.s.profile == "young"
         from ..calibration import params_from
         self.detector.p = params_from(self.s.blink_overrides)
 

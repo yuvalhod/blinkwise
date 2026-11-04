@@ -79,6 +79,8 @@ class App:
         self._updates = None
         self.calib = None                    # calibration.Session while one is running/unsaved
         self._burst_anchor = time.monotonic()
+        from .family.control import FamilyControl
+        self.family = FamilyControl(self)
         self._carry = None                   # last real frame, for burst-mode carry-forward
         self._carry_t = 0.0
 
@@ -88,7 +90,7 @@ class App:
             from .ui.dashboard import DashboardServer
             self.server = DashboardServer(self.s.dashboard_port, self.snapshot, self.history,
                                           self._on_dashboard_action, lambda: self.s,
-                                          self._on_settings)
+                                          self._on_settings, family=self.family)
             url = self.server.start()
             print(f"Dashboard: {url}")
             if not self.demo and not self.s.setup_done:
@@ -257,7 +259,8 @@ class App:
                     camera_resting=self.burst_resting() and not self.paused.is_set(),
                     camera_back_in_s=(round(self.burst_back_in())
                                       if self.burst_resting() else None),
-                    checkin_due=self.checkin_due and not self.demo)
+                    checkin_due=self.checkin_due and not self.demo,
+                    family_sharing=bool(self.s.family_token), kids=self.s.profile == "young")
         with self._snap_lock:
             self._snapshot = snap
 
@@ -349,6 +352,10 @@ class App:
         while not self.stop.is_set():
             self.poll_system()
             self.check_updates()
+            try:
+                self.family.maybe_upload()
+            except Exception:
+                log.exception("family upload failed")
             self.stop.wait(SYSTEM_POLL_S)
 
     def check_updates(self) -> None:
@@ -434,7 +441,12 @@ class App:
         elif action.startswith("quiet:"):
             self.set_quiet(float(action.split(":", 1)[1]) or None)
         elif action.startswith("preset:"):
-            self._on_settings({"preset": action.split(":", 1)[1]})
+            try:
+                self._on_settings({"preset": action.split(":", 1)[1]})
+            except PermissionError:
+                self._open_dashboard("#settings")      # locked: change it there, with the PIN
+        elif action.startswith("cue:") and self.s.parent_pin:
+            self._open_dashboard("#settings")
         elif action.startswith("cue:"):
             self.s.blink_cue = action.split(":", 1)[1]
             try:
@@ -460,6 +472,10 @@ class App:
         else:
             self._on_dashboard_action(action)
         self._publish_soon()
+
+    def _open_dashboard(self, path: str = "") -> None:
+        if self.server is not None:
+            webbrowser.open(self.server.url + path)
 
     def _publish_soon(self) -> None:
         # Only ever touch the engine from the vision thread: just ask it to republish now.
@@ -488,6 +504,12 @@ class App:
 
     def _on_settings(self, changes: Dict[str, Any]) -> Settings:
         """Validated settings change from the dashboard; applied live, then saved."""
+        changes = dict(changes)
+        pin = changes.pop("pin", "")
+        if self.s.parent_pin and set(changes) - {"setup_done"}:
+            from .family.client import check_pin
+            if not check_pin(str(pin), self.s.parent_pin):
+                raise PermissionError("parent PIN required")
         with self._settings_lock:
             before = self.s.sampling
             self.s.apply_ui_changes(changes)

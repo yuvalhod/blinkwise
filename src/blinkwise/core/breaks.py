@@ -24,6 +24,12 @@ LONG_EXERCISE = ("Stand up and move. Neck: roll your shoulders back 5 times and 
                  "your chin 5 times. Eyes: close gently (2 s), squeeze gently (2 s), open - "
                  "repeat 10 times.")
 
+# Kids mode: same breaks, friendlier words.
+KID_MICRO_EXERCISE = ("Eye break! Find the farthest thing you can see - a tree, a cloud, a "
+                      "building - and look at it while you count to 20.")
+KID_LONG_EXERCISE = ("Time to move! Stand up, stretch up high, roll your shoulders, and go look "
+                     "out of a window or step outside for a few minutes.")
+
 
 @dataclass
 class _Active:
@@ -44,6 +50,7 @@ class BreakScheduler:
         self.adaptive = adaptive
         self.grace_s = grace_s
         self.snooze_s = snooze_s
+        self.kid = False                # kids mode: friendlier exercise text
         self.since_micro = 0.0          # screen seconds since last micro break
         self.since_long = 0.0
         self.away_run = 0.0             # current continuous resting/away time
@@ -90,13 +97,14 @@ class BreakScheduler:
             self.active = _Active("long", t, self.long_len)
             out.append(BreakDue("long", self.long_len,
                                 f"{self.since_long / 60:.0f} minutes of screen time since your "
-                                "last real break", LONG_EXERCISE))
+                                "last real break", KID_LONG_EXERCISE if self.kid else LONG_EXERCISE))
         elif self.since_micro >= self.micro_interval(low_blink):
             self.active = _Active("micro", t, self.micro_len)
             reason = f"{self.since_micro / 60:.0f} minutes of screen time"
             if low_blink and self.adaptive:
                 reason += " (brought forward because you're blinking less than usual)"
-            out.append(BreakDue("micro", self.micro_len, reason, MICRO_EXERCISE))
+            out.append(BreakDue("micro", self.micro_len, reason,
+                                KID_MICRO_EXERCISE if self.kid else MICRO_EXERCISE))
         return out
 
     def finish(self, outcome: str) -> Optional[BreakEnded]:

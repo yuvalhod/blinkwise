@@ -64,6 +64,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub.add_parser("uninstall-app", help="macOS: remove Blinkwise.app and its login item")
 
     sub.add_parser("doctor", help="check that camera, model and UI work on this machine")
+    fs = sub.add_parser("family-server", help="run the parent-account server for family sharing")
+    fs.add_argument("--host", default="127.0.0.1")
+    fs.add_argument("--port", type=int, default=8790)
+    fs.add_argument("--public-url", default="", help="the https:// address parents and devices use")
+    fs.add_argument("--db", help="SQLite file (default: <data dir>/family.sqlite)")
+    fs.add_argument("--send-digests-now", action="store_true", help="email last week's totals and exit")
     sub.add_parser("science", help="the research behind Blinkwise's advice")
     w = sub.add_parser("wipe", help="delete all locally stored history")
     w.add_argument("--yes", action="store_true")
@@ -79,6 +85,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "dashboard": cmd_dashboard, "calibrate": cmd_calibrate, "config": cmd_config,
         "doctor": cmd_doctor, "science": cmd_science, "wipe": cmd_wipe, "selftest": cmd_selftest,
         "install-app": cmd_install_app, "uninstall-app": cmd_uninstall_app,
+        "family-server": cmd_family_server,
     }[cmd](args)
 
 
@@ -297,6 +304,14 @@ def cmd_uninstall_app(args) -> int:
 
 def cmd_config(args) -> int:
     s = Settings() if args.reset else Settings.load()
+    current = Settings.load()
+    if (args.assignments or args.reset) and current.parent_pin:
+        import getpass
+
+        from .family.client import check_pin
+        if not check_pin(getpass.getpass("Parent PIN: "), current.parent_pin):
+            print("error: wrong PIN", file=sys.stderr)
+            return 2
     if args.assignments or args.reset:
         try:
             s.update(**dict(a.split("=", 1) for a in args.assignments))
@@ -304,8 +319,27 @@ def cmd_config(args) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
         print(f"Saved {s.save()}")
-    for k, v in dataclasses.asdict(s).items():
+    for k, v in s.public_dict().items():
         print(f"  {k} = {v}")
+    return 0
+
+
+def cmd_family_server(args) -> int:
+    from .family import mail
+    from .family.server import FamilyServer, send_digests
+    db = Path(args.db) if args.db else data_dir() / "family.sqlite"
+    srv = FamilyServer(db, mail.from_env(), public_url=args.public_url, host=args.host, port=args.port)
+    if args.send_digests_now:
+        print(f"Sent {send_digests(srv.store, srv.mailer, srv.base_url)} digest(s).")
+        return 0
+    if not srv.secure:
+        print("Note: without an https:// --public-url, use this for local testing only.")
+    print(f"Blinkwise Family: {srv.start()}  (Ctrl+C to stop)")
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        srv.stop()
     return 0
 
 

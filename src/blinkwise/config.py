@@ -115,6 +115,13 @@ class Settings:
     history_days: int = 90                # history older than this is deleted automatically
     check_updates: bool = True            # once a day, anonymous; never downloads anything
     blink_overrides: dict = field(default_factory=dict)  # personal detector settings (calibration)
+    # --- family sharing (off until a parent's pairing code is entered) -------
+    family_url: str = ""                  # the parent's family server
+    family_token: str = ""                # this computer's device token (secret)
+    family_name: str = ""                 # the name the parent gave this child
+    family_share_checkin: bool = False    # also share the weekly eye check-in score
+    family_removed: bool = False          # the parent removed this computer
+    parent_pin: str = ""                  # salted PBKDF2 hash; locks settings in kids mode
 
     @classmethod
     def path(cls) -> Path:
@@ -138,6 +145,15 @@ class Settings:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(dataclasses.asdict(self), indent=2))
         return p
+
+    SECRET_FIELDS = ("family_token", "parent_pin")
+
+    def public_dict(self) -> dict:
+        """For UIs: secrets replaced by whether they're set."""
+        d = dataclasses.asdict(self)
+        for k in self.SECRET_FIELDS:
+            d[k] = bool(d[k])
+        return d
 
     def apply_preset(self, name: str) -> "Settings":
         if name not in PRESETS:

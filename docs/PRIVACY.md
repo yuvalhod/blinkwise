@@ -56,6 +56,7 @@ network access is the one-time model download. This is not legal advice.
 
 * **One-time model download** (3.7 MB) from `storage.googleapis.com` (Google's official MediaPipe model bucket), verified against a pinned SHA-256. To avoid even this, download the file yourself and set `BLINKWISE_MODEL=/path/to/face_landmarker.task`.
 * **Daily update check** (you can turn it off: Settings > Check for updates daily, or `blinkwise config check_updates=false`). Once a day Blinkwise asks GitHub for the project's latest release number: an anonymous GET of `api.github.com/repos/blinkwise/blinkwise/releases/latest` with no identifiers, settings or usage data. GitHub sees your IP address, as with any web request. If there's a newer version you'll see a link; nothing is downloaded or installed automatically.
+* **Family sharing, only if you connect to a parent** (off by default): weekly totals to the parent's Blinkwise Family server, at most every 6 hours. The exact fields, and how to stop, are in [FAMILY.md](FAMILY.md). The dashboard shows every value before and while it's shared.
 * **Nothing else.** No telemetry, analytics or accounts. The dashboard page loads no external scripts, fonts or images.
 
 ## The local dashboard

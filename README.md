@@ -32,6 +32,7 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 | **Drowsiness** | PERCLOS (share of time the eyes are mostly closed), the standard camera measure of drowsiness. |
 | **Self-test** | `blinkwise selftest` checks in 30 seconds that detection works on *your* face and camera. |
 | **Weekly report and check-in** | This week vs last: screen and phone time, blink rate, full blinks, breaks taken, distance, plus one gentle goal for next week. Once a week, three questions on how your eyes felt (our wording, inspired by the OSDI and CVS-Q questionnaires). If a symptom is there almost always, or stays high two weeks running, it suggests seeing an eye-care professional. View only: nothing is emailed or sent. |
+| **Kids and parents** | Kids mode has friendlier prompts, outdoor-time reminders, and a parent PIN that locks settings. Optional family sharing: a parent signs in (magic link, no password) to see each child's weekly totals and can get them by email on Monday mornings. Only weekly numbers are shared, never video or minute-by-minute data. The child sees exactly what's shared, and when. See [docs/FAMILY.md](docs/FAMILY.md). |
 | **Dashboard** | A local web page with live numbers, today's blink rate, a top-down view of your screens, suggestions with sources, and 14-day history. |
 
 ![Overlays: blink cue, break card, suggestion](docs/img/overlays.png)
@@ -140,6 +141,7 @@ Performance: about 80 fps of processing on a laptop CPU. At the default 24 fps c
 * Only per-minute aggregates (blink counts, distance, break outcomes) are stored, in a local SQLite file you can delete with `blinkwise wipe`.
 * Network access is limited to a one-time 3.7 MB download of Google's MediaPipe face model (verified by SHA-256; you can supply it with `BLINKWISE_MODEL=/path/to/face_landmarker.task`) and an anonymous daily check for a newer release, which you can turn off.
 * The dashboard listens on 127.0.0.1 only and rejects cross-site requests.
+* Family sharing is off unless a parent's pairing code is entered. It sends weekly totals only ([docs/FAMILY.md](docs/FAMILY.md)).
 * "Pause" in the dashboard releases the camera, so the camera light goes off.
 
 See [docs/PRIVACY.md](docs/PRIVACY.md).

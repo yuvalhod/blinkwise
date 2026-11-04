@@ -124,6 +124,10 @@ details.row .src a{color:var(--accent);text-decoration:none}
 .advice.doctor{background:color-mix(in srgb,var(--warn) 12%,transparent);border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}
 .advice b{display:block;margin-bottom:3px}
 .advice span{color:var(--muted)}
+.fam-form{display:grid;gap:8px;padding:12px 14px}
+.fam-form input{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--ink);width:100%}
+.preview{font-size:12.5px;color:var(--muted);margin:6px 0 0;display:grid;grid-template-columns:1fr auto;gap:2px 12px}
+.preview b{grid-column:1/-1;color:var(--ink);font-weight:600;margin-top:6px}
 .btn.primary{background:var(--accent);border-color:transparent;color:#05241c}
 .scrim{position:fixed;inset:0;background:rgba(5,9,16,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:2}
 .scrim.open{opacity:1;pointer-events:auto}
@@ -237,7 +241,7 @@ footer{margin-top:20px;color:var(--faint);font-size:12px;display:flex;gap:8px;al
       <div id="days"><p class="empty">No history yet.</p></div>
     </section>
   </main>
-  <footer><svg class="i"><use href="#i-lock"/></svg> Processed on this computer. No images stored or sent.</footer>
+  <footer><svg class="i"><use href="#i-lock"/></svg> <span id="footText">Processed on this computer. No images stored or sent.</span></footer>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -254,6 +258,9 @@ footer{margin-top:20px;color:var(--faint);font-size:12px;display:flex;gap:8px;al
     <div class="set"><span class="danger">Delete all history</span><button class="btn" id="wipeBtn">Delete</button></div>
   </div>
   <p class="hint">Only per-minute counts are kept, on this computer: blinks, distance, screen and phone time, breaks, and your weekly check-in answers. Never images, video or face data.</p>
+  <div class="group">Family</div>
+  <div class="panel" id="family"></div>
+  <p class="hint" id="familyHint">Share weekly totals (never video, images or minute-by-minute data) with a parent's Blinkwise Family account.</p>
   <div class="group">About</div>
   <div class="panel">
     <div class="set"><span>Camera setup check</span><a class="btn" href="/setup">Open</a></div>
@@ -491,16 +498,79 @@ function renderSettings(st){
     saveSettings({[el.dataset.k]: v});
   });
 }
+async function withPin(url, body){
+  let [ok, res] = await post(url, body);
+  if (!ok && res.pin_required){
+    const pin = prompt("Parent PIN");
+    if (pin == null) return [false, {error: "Not changed"}];
+    [ok, res] = await post(url, {...body, pin});
+    if (!ok && res.pin_required) res.error = "Wrong PIN";
+  }
+  return [ok, res];
+}
 async function saveSettings(change){
-  const [ok, body] = await post("/api/settings", change);
+  const [ok, body] = await withPin("/api/settings", change);
   if (!ok){ toast(body.error || "Not saved"); return loadSettings(); }
   renderSettings(body); toast("Saved");
 }
-async function loadSettings(){ try { const st = await (await fetch("/api/settings")).json(); if (st.preset) renderSettings(st); } catch(e){} }
+async function loadSettings(){ try { const st = await (await fetch("/api/settings")).json(); if (st.preset) renderSettings(st); } catch(e){} loadFamily(); }
+
+function previewHtml(f){
+  if (!f.preview.length) return `<p class="preview">Nothing yet: totals appear after a day of use.</p>`;
+  return `<div class="preview">` + f.preview.map(w => `<b>Week of ${esc(w.week)}</b>` + w.rows.map(([k,v]) => `<span>${esc(k)}</span><span class="num">${esc(v)}</span>`).join("")).join("") + `</div>`;
+}
+let famOpen = false;
+function renderFamily(f){
+  let h = "";
+  if (f.removed) h += `<div class="set"><span>A parent removed this computer. Nothing is shared.</span><button class="btn" data-op="dismiss_removed">OK</button></div>`;
+  if (f.paired){
+    h += `<div class="set"><span>Sharing with <b>${esc(f.server)}</b>${f.name ? ` as ${esc(f.name)}` : ""}</span><button class="btn" id="famStop">Stop</button></div>
+      <div class="set"><span>Include my eye check-in score</span><label class="switch"><input type="checkbox" id="famCk" ${f.share_checkin ? "checked" : ""}><span></span></label></div>
+      <details class="set" style="display:block"><summary style="cursor:pointer">What's shared</summary>${previewHtml(f)}</details>`;
+  } else if (!famOpen){
+    h += `<div class="set"><span>Share with a parent</span><button class="btn" id="famOpen">Connect</button></div>`;
+  } else {
+    h += `<div class="fam-form">
+      ${f.default_url ? "" : `<input id="famUrl" placeholder="Server, e.g. https://family.example.org" aria-label="Family server address">`}
+      <input id="famCode" placeholder="Parent's code, e.g. ABCD-EF23" aria-label="Pairing code" autocomplete="off">
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="famCk2" style="width:auto"> Also share my eye check-in score</label>
+      <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="famCancel">Cancel</button><button class="btn primary" id="famGo">Connect</button></div>
+      <details><summary style="cursor:pointer;font-size:13px">What will be shared</summary>${previewHtml(f)}</details></div>`;
+  }
+  h += `<div class="set"><span>Parent PIN <span class="hint" style="margin:0">${f.pin_set ? "· settings locked" : ""}</span></span><button class="btn" id="famPin">${f.pin_set ? "Change" : "Set"}</button></div>`;
+  $("family").innerHTML = h;
+  $("footText").textContent = f.paired ? "Processed on this computer. Weekly totals are shared with a parent; never images." : "Processed on this computer. No images stored or sent.";
+  document.querySelectorAll("#family [data-op]").forEach(b => b.onclick = () => famPost({op: b.dataset.op}));
+  const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; };
+  on("famOpen", () => { famOpen = true; renderFamily(f); });
+  on("famCancel", () => { famOpen = false; renderFamily(f); });
+  on("famGo", async () => {
+    $("famGo").disabled = true; $("famGo").textContent = "Connecting...";
+    const ok = await famPost({op: "pair", url: $("famUrl") ? $("famUrl").value : "", code: $("famCode").value, share_checkin: $("famCk2").checked});
+    if (ok){ famOpen = false; toast("Connected"); }
+  });
+  on("famStop", async () => { if (confirm("Stop sharing? Your parent will see that sharing stopped, and your data on their account is deleted.")) { if (await famPost({op: "stop"})) toast("Sharing stopped"); } });
+  const ck = $("famCk"); if (ck) ck.onchange = () => famPost({op: "share_checkin", on: ck.checked});
+  on("famPin", async () => {
+    const old = f.pin_set ? prompt("Current parent PIN") : "";
+    if (old == null) return;
+    const pin = prompt(f.pin_set ? "New PIN (4-8 digits), or leave empty to remove it" : "Choose a PIN (4-8 digits). It locks settings on this computer.");
+    if (pin == null) return;
+    const [ok, res] = await post("/api/family", {op: "set_pin", old, pin});
+    toast(ok ? (pin ? "PIN set" : "PIN removed") : (res.pin_required ? "Wrong PIN" : res.error || "Not saved"));
+    if (ok) renderFamily(res);
+  });
+}
+async function famPost(body){
+  const [ok, res] = await withPin("/api/family", body);
+  if (!ok){ toast(res.error || "Not saved"); loadFamily(); return false; }
+  renderFamily(res); return true;
+}
+async function loadFamily(){ try { const r = await fetch("/api/family"); if (r.ok) renderFamily(await r.json()); else $("family").closest(".panel").hidden = true; } catch(e){} }
 $("keepDays").onchange = e => saveSettings({history_days: Number(e.target.value)});
 $("wipeBtn").onclick = async () => {
   if (!confirm("Delete all Blinkwise history on this computer? This can't be undone.")) return;
-  const [ok] = await post("/api/action", {action: "wipe"});
+  const [ok] = await withPin("/api/action", {action: "wipe"});
   toast(ok ? "History deleted" : "Couldn't delete"); refreshHistory();
 };
 function drawer(open){
