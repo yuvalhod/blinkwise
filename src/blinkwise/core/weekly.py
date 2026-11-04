@@ -90,6 +90,8 @@ def _week(days: Sequence[Dict[str, Any]], start: date, end: date) -> Dict[str, A
         "breaks_pct": round(100 * taken / (taken + missed)) if taken + missed >= 3 else None,
         "breaks_taken": taken,
         "distance_cm": round(sorted(dist)[len(dist) // 2]) if dist else None,
+        "posture_per_day": (round(sum(d.get("posture_minutes") or 0 for d in active) / n)
+                            if n and any("posture_minutes" in d for d in active) else None),
     }
 
 
@@ -112,6 +114,11 @@ def pick_goal(this: Dict[str, Any], symptoms: Optional[Dict[str, Any]] = None) -
     if dist is not None and dist < 50:
         return {"key": "distance_cm", "target": "50",
                 "text": "Sit back to about an arm's length (50 cm or more) from your screen."}
+    posture = this.get("posture_per_day")
+    if posture is not None and posture >= 45:
+        return {"key": "posture_per_day", "target": str(int(posture * 0.6)),
+                "text": "Sit back and tall: when Blinkwise says you're leaning in or your chin "
+                        "is down, reset and roll your shoulders."}
     phone = this.get("phone_per_day")
     if phone is not None and phone >= 90:
         return {"key": "phone_per_day", "target": str(int(phone * 0.8)),
@@ -138,7 +145,8 @@ def report(days: Sequence[Dict[str, Any]], checkins: Sequence[Dict[str, Any]] = 
             ("blink_rate", "Blinks a minute", "/min", True),
             ("full_blinks", "Full blinks", "%", True),
             ("breaks_pct", "Eye breaks taken", "%", True),
-            ("distance_cm", "Viewing distance", "cm", True)):
+            ("distance_cm", "Viewing distance", "cm", True),
+            ("posture_per_day", "Strained posture a day", "min", False)):
         if this.get(key) is None and last.get(key) is None:
             continue
         rows.append({"key": key, "label": label, "unit": unit, "this": this.get(key),
@@ -148,7 +156,7 @@ def report(days: Sequence[Dict[str, Any]], checkins: Sequence[Dict[str, Any]] = 
     goal_met = None
     if last_goal and last_goal["key"] not in ("keep",) and this.get(last_goal["key"]) is not None:
         v, tgt = this[last_goal["key"]], float(last_goal["target"])
-        goal_met = v <= tgt if last_goal["key"] == "phone_per_day" else v >= tgt
+        goal_met = v <= tgt if last_goal["key"] in ("phone_per_day", "posture_per_day") else v >= tgt
     return {
         "has_data": this["days"] > 0,
         "days_this_week": this["days"],

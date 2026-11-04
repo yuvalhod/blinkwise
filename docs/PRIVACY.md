@@ -24,6 +24,7 @@ because a feature reads it:
 | Number of screens in use | multi-screen insight |
 | Seconds on your computer screen / looking down at another device, switches | screen time, phone time, switching between them |
 | Minutes of continuous use | your blink-drop pattern and break interval |
+| Seconds in a strained posture (one number, no angles) | posture time in the weekly report |
 | Weekly check-in answers (three 0-3 scores) | your symptom trend and the eye-doctor suggestion |
 
 Plus: break outcomes (taken / skipped), your settings, and small marker files (first-run

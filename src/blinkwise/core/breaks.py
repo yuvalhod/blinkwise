@@ -20,8 +20,9 @@ from .events import BreakDue, BreakEnded
 
 MICRO_EXERCISE = ("Look at something at least 6 m (20 ft) away - out of a window if you can - "
                   "and blink slowly a few times.")
-LONG_EXERCISE = ("Stand up and move. Then try a blinking exercise: close your eyes gently "
-                 "(2 s), squeeze gently (2 s), open - repeat 10 times.")
+LONG_EXERCISE = ("Stand up and move. Neck: roll your shoulders back 5 times and gently tuck "
+                 "your chin 5 times. Eyes: close gently (2 s), squeeze gently (2 s), open - "
+                 "repeat 10 times.")
 
 
 @dataclass

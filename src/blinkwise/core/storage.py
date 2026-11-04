@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from .events import BreakEnded, MinuteSummary
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS minutes (
@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS minutes (
     obs_down_s REAL NOT NULL DEFAULT 0,
     blinks_down INTEGER NOT NULL DEFAULT 0,
     device_switches INTEGER NOT NULL DEFAULT 0,
-    stares20 INTEGER NOT NULL DEFAULT 0
+    stares20 INTEGER NOT NULL DEFAULT 0,
+    posture_s REAL NOT NULL DEFAULT 0      -- leaning in / chin down / head tilted
 );
 CREATE TABLE IF NOT EXISTS breaks (
     ts INTEGER NOT NULL, kind TEXT NOT NULL, outcome TEXT NOT NULL
@@ -48,7 +49,7 @@ CREATE TABLE IF NOT EXISTS checkins (   -- weekly "how do your eyes feel", 0 nev
 
 _COLS = ("ts", "observed_s", "blinks", "judged", "incomplete", "long_blinks", "max_stare_s",
          "distance_cm", "zones", "session_min", "screen_s", "down_s", "obs_down_s",
-         "blinks_down", "device_switches", "stares20")
+         "blinks_down", "device_switches", "stares20", "posture_s")
 
 # Minutes counted as "multitasking": both the computer and another device in the same minute.
 MULTI_MIN_EACH_S = 5.0
@@ -74,6 +75,10 @@ class History:
         version = self._db.execute("PRAGMA user_version").fetchone()[0]
         tables = {r[0] for r in self._db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if version >= SCHEMA_VERSION or "minutes" not in tables:
+            return
+        if version == 2:                    # v3 only adds a column
+            self._db.execute("ALTER TABLE minutes ADD COLUMN posture_s REAL NOT NULL DEFAULT 0")
+            self._db.commit()
             return
         have = {r[1] for r in self._db.execute("PRAGMA table_info(minutes)")}
         self._db.executescript(SCHEMA.replace("CREATE TABLE IF NOT EXISTS minutes",
@@ -101,7 +106,8 @@ class History:
             if isinstance(ev, MinuteSummary):
                 vals = (int(wall), ev.observed_s, ev.blinks, ev.judged, ev.incomplete, ev.long,
                         ev.max_stare_s, ev.distance_cm, ev.zones, ev.session_min, ev.screen_s,
-                        ev.down_s, ev.obs_down_s, ev.blinks_down, ev.device_switches, ev.stares20)
+                        ev.down_s, ev.obs_down_s, ev.blinks_down, ev.device_switches, ev.stares20,
+                        ev.posture_s)
                 self._db.execute(
                     f"INSERT OR REPLACE INTO minutes ({', '.join(_COLS)}) "  # noqa: S608
                     f"VALUES ({', '.join('?' * len(_COLS))})", vals)
@@ -166,7 +172,7 @@ class History:
                           SUM(long_blinks), MAX(max_stare_s), AVG(distance_cm), MAX(zones),
                           SUM(screen_s), SUM(down_s),
                           SUM(CASE WHEN screen_s >= ? AND down_s >= ? THEN 1 ELSE 0 END),
-                          SUM(device_switches)
+                          SUM(device_switches), SUM(posture_s)
                    FROM minutes WHERE ts >= ? GROUP BY day ORDER BY day""",
                 (MULTI_MIN_EACH_S, MULTI_MIN_EACH_S, since)).fetchall()
             brk = dict(((d, k, o), n) for d, k, o, n in self._db.execute(
@@ -174,7 +180,7 @@ class History:
                    FROM breaks WHERE ts >= ? GROUP BY 1, 2, 3""", (since,)).fetchall())
         out = []
         for (day, obs, blinks, judged, inc, lng, stare, dist, zones, scr, down, multi,
-             switches) in rows:
+             switches, posture) in rows:
             obs = obs or 0.0
             done = sum(n for (d, _, o), n in brk.items() if d == day and o in ("rested", "timer"))
             missed = sum(n for (d, _, o), n in brk.items() if d == day and o in ("skipped", "missed"))
@@ -184,6 +190,7 @@ class History:
                 "device_minutes": round((down or 0) / 60, 1),    # phone / other device
                 "multitask_minutes": int(multi or 0),            # both in the same minute
                 "device_switches": int(switches or 0),
+                "posture_minutes": round((posture or 0) / 60, 1),
                 "blinks": blinks or 0,
                 "observed_minutes": round(obs / 60, 1),
                 "blink_rate": round(blinks / obs * 60, 1) if obs >= 60 else None,

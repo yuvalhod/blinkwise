@@ -22,6 +22,8 @@ from .coach import Coach, CoachContext
 from .engagement import LADDER, Escalator
 from .events import BlinkEvent, BreakDue, BreakEnded, MinuteSummary, StareCue, Suggestion
 from .metrics import RollingStats
+from .posture import LABELS as POSTURE_LABELS
+from .posture import PostureTracker
 
 AWAY_RESET_S = 2.0          # after this long without seeing the eyes, assume they blinked
 DOWN_DEG = 18.0             # head this far below your screen pitch = phone/desk/paper
@@ -47,6 +49,7 @@ class _Minute:
     blinks_down: int = 0
     device_switches: int = 0     # screen <-> looking down transitions
     stares20: int = 0            # stares of 20 s or more
+    posture_s: float = 0.0       # time in a strained posture
 
 
 class Engine:
@@ -63,6 +66,7 @@ class Engine:
                                      self.s.long_break_minutes, self.s.long_break_seconds,
                                      self.s.adaptive_breaks)
         self.coach = Coach(self.s)
+        self.posture = PostureTracker()
         self.monitors = connected_monitors() if monitors == -1 else monitors
 
         self._t0: Optional[float] = None
@@ -158,6 +162,11 @@ class Engine:
             if self.s.adaptive_cues and self.s.blink_cue in LADDER:
                 self.escalator.tick(t)
         self._track_activity(t, dt, f, attending)
+        if not f.extrapolated:
+            self.posture.update(t, dt, attending and not self._down_now and self._closed_run < 3.0,
+                                f.pitch, f.roll, f.distance_cm, f.yaw)
+        if self.posture.current is not None and attending and self._minute is not None:
+            self._minute.posture_s += dt
         out.extend(self._roll_minute(t, dt, attending, stare, eyes_usable))
 
         if t - self._last_coach_t >= 10.0 and t - self._t0 >= 120.0:
@@ -235,6 +244,8 @@ class Engine:
             "head_pitch_now": _r(f.pitch if f and f.face else None),
             "face_px": _r(f.face_px if f and f.face else None, 0),
             "eyes_hidden": bool(self.detector.eyes_hidden),
+            "posture": POSTURE_LABELS.get(self.posture.current or "") if self.posture.current
+            else ("Good" if self.posture.baseline_distance() is not None else None),
             "eyes_visible": [_r(self.detector.vis_right, 3), _r(self.detector.vis_left, 3)],
             "screen_minutes": round(self._screen_s / 60, 1),
             "monitors_connected": self.monitors,
@@ -333,7 +344,8 @@ class Engine:
             s10=self.stats.window(t, 600), distance_cm=dist, pitch=pitch, luminance=lum,
             zones=self.attention.zones, monitors=self.monitors,
             switches_per_min=self.attention.switches_per_min(t),
-            screen_minutes=self._screen_s / 60.0, fps=self.detector.fps, quality=self.quality())
+            screen_minutes=self._screen_s / 60.0, fps=self.detector.fps, quality=self.quality(),
+            posture=self.posture.current, posture_held_s=self.posture.held_for(t))
 
     def screen_pitch(self) -> float:
         """Your usual head pitch when looking at your screens (time-weighted over zones)."""
@@ -394,7 +406,8 @@ class Engine:
             distance_cm=dist, zones=len(self.attention.zones),
             session_min=round(m.session_min, 1), screen_s=round(m.screen_s, 1),
             down_s=round(m.down_s, 1), obs_down_s=round(m.obs_down_s, 1),
-            blinks_down=m.blinks_down, device_switches=m.device_switches, stares20=m.stares20)
+            blinks_down=m.blinks_down, device_switches=m.device_switches, stares20=m.stares20,
+            posture_s=round(m.posture_s, 1))
         self._minute = _Minute(start=t, session_min=self._continuous_s / 60)
         return [summary]
 

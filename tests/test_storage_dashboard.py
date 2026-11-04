@@ -83,7 +83,7 @@ def test_purge_and_export(tmp_path):
     assert set(ex["minutes"][0]) == {"ts", "observed_s", "blinks", "judged", "incomplete",
                                      "long_blinks", "max_stare_s", "distance_cm", "zones",
                                      "session_min", "screen_s", "down_s", "obs_down_s",
-                                     "blinks_down", "device_switches", "stares20"}
+                                     "blinks_down", "device_switches", "stares20", "posture_s"}
 
 
 @pytest.fixture

@@ -46,6 +46,9 @@ class Scenario:
     blink_times: Sequence[float] = ()         # scripted blinks (replaces the random ones)
     blink_depth: Optional[Tuple[float, float]] = None  # remaining openness at the bottom
     glance_windows: Sequence[Tuple[float, float]] = ()  # scripted looks at the keyboard
+    lean_windows: Sequence[Tuple[float, float]] = ()    # leaning in (25% closer)
+    slump_windows: Sequence[Tuple[float, float]] = ()   # chin down 15 degrees
+    tilt_windows: Sequence[Tuple[float, float]] = ()    # head tilted 15 degrees
     seed: int = 7
 
 
@@ -122,7 +125,10 @@ class Simulation:
             down = any(a <= t < b for a, b in glances)
             on_phone = any(a <= t < b for a, b in sc.phone)
             ty = target.yaw
-            tp = target.pitch - (35.0 if on_phone else 25.0 if down else 0.0)
+            lean = any(a <= t < b for a, b in sc.lean_windows)
+            slump = any(a <= t < b for a, b in sc.slump_windows)
+            tilt = 15.0 if any(a <= t < b for a, b in sc.tilt_windows) else 0.0
+            tp = target.pitch - (35.0 if on_phone else 25.0 if down else 0.0) - (15.0 if slump else 0.0)
             # Saccade/head movement: fast exponential approach (~120 ms time constant).
             a = 1 - math.exp(-1.0 / (sc.fps * 0.12))
             yaw_s = ty if yaw_s is None else yaw_s + (ty - yaw_s) * a
@@ -143,8 +149,9 @@ class Simulation:
                 ear_right=max(0.01, base_r * gaze_factor * lid + rng.gauss(0, sc.ear_noise)),
                 ear_left=max(0.01, base_l * gaze_factor * lid + rng.gauss(0, sc.ear_noise)),
                 width_right=wr, width_left=wl,
-                yaw=yaw_n, pitch=pitch_s + rng.gauss(0, sc.pose_noise_deg), roll=0.0,
-                distance_cm=sc.distance_cm + rng.gauss(0, 1.5),
+                yaw=yaw_n, pitch=pitch_s + rng.gauss(0, sc.pose_noise_deg),
+                roll=tilt + rng.gauss(0, sc.pose_noise_deg),
+                distance_cm=sc.distance_cm * (0.75 if lean else 1.0) + rng.gauss(0, 1.5),
                 luminance=sc.luminance + rng.gauss(0, 2.0),
                 faces=1, vis_right=0.07, vis_left=0.07,
                 face_px=15.0 * 554.0 / sc.distance_cm,   # 15 cm face, 640 px / 60 deg camera

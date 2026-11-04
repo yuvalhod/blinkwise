@@ -66,3 +66,4 @@ class MinuteSummary:
     blinks_down: int = 0
     device_switches: int = 0
     stares20: int = 0
+    posture_s: float = 0.0          # leaning in / chin down / head tilted (see core/posture.py)

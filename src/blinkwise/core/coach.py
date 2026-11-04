@@ -41,6 +41,8 @@ class CoachContext:
     screen_minutes: float            # total attended minutes this session
     fps: float
     quality: Quality = field(default_factory=lambda: Quality("unknown"))
+    posture: Optional[str] = None     # "leaning_in" | "chin_down" | "head_tilt"
+    posture_held_s: float = 0.0
 
 
 @dataclass
@@ -69,6 +71,7 @@ class Coach:
             _Rule("dim_light", 60 * 60, rule_dim_light),
             _Rule("young_outdoors", 4 * 3600, rule_young_outdoors),
             _Rule("tracking_quality", 30 * 60, rule_tracking_quality),
+            _Rule("posture", 20 * 60, rule_posture),
         ]
 
     def evaluate(self, ctx: CoachContext) -> List[Suggestion]:
@@ -271,3 +274,25 @@ def rule_tracking_quality(c: CoachContext, s: Settings) -> Optional[Suggestion]:
         f"Tracking is unreliable right now ({'; '.join(q.reasons)}), so blink-based advice is "
         f"paused rather than risk being wrong. {' '.join(q.tips)}",
         refs=[], data={"reasons": q.reasons})
+
+
+POSTURE_TIPS = {
+    "leaning_in": ("You're leaning in",
+                   "You've moved closer to the screen than when you sit back. Sit back against "
+                   "the chair and make the text bigger if you need to (Cmd/Ctrl +)."),
+    "chin_down": ("Chin up",
+                  "Your head has dropped forward for a few minutes. Sit tall, bring your chin back "
+                  "over your shoulders, and raise the screen if you keep looking down at it."),
+    "head_tilt": ("Your head is tilted",
+                  "You've been holding your head to one side. Sit square to the screen, and "
+                  "centre the screen you use most in front of you."),
+}
+
+
+def rule_posture(c: CoachContext, s: Settings) -> Optional[Suggestion]:
+    from .posture import NUDGE_AFTER_S
+    if c.posture not in POSTURE_TIPS or c.posture_held_s < NUDGE_AFTER_S:
+        return None
+    title, msg = POSTURE_TIPS[c.posture]
+    return Suggestion("", "warn", title, msg, refs=["aoa_ergonomics"],
+                      data={"pattern": c.posture, "minutes": round(c.posture_held_s / 60)})
