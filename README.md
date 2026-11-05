@@ -48,7 +48,7 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 Until the first PyPI release, install from source:
 
 ```bash
-git clone https://github.com/blinkwise/blinkwise && cd blinkwise
+git clone https://github.com/yuvalhod/blinkwise && cd blinkwise
 ```
 
 ```bash

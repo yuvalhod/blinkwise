@@ -20,7 +20,7 @@ def test_checks_once_a_day_and_remembers(tmp_path):
 
     def fetch():
         calls.append(1)
-        return {"version": "9.0.0", "url": "https://github.com/blinkwise/blinkwise/releases/tag/v9.0.0"}
+        return {"version": "9.0.0", "url": "https://github.com/yuvalhod/blinkwise/releases/tag/v9.0.0"}
 
     c = updates.UpdateChecker(tmp_path / "u.json", fetch=fetch, clock=lambda: now[0])
     assert c.maybe_check()["version"] == "9.0.0"
@@ -46,7 +46,7 @@ def test_offline_or_garbage_is_harmless(tmp_path):
 
 
 def test_app_menu_shows_update_and_respects_opt_out(tmp_path, monkeypatch):
-    info = {"version": "9.0.0", "url": "https://github.com/blinkwise/blinkwise/releases/tag/v9.0.0"}
+    info = {"version": "9.0.0", "url": "https://github.com/yuvalhod/blinkwise/releases/tag/v9.0.0"}
     monkeypatch.setattr(updates, "fetch_latest", lambda: info)
     monkeypatch.setattr(updates.UpdateChecker.__init__, "__defaults__",
                         (lambda: info, updates.time.time))

@@ -19,7 +19,7 @@ from . import __version__
 
 log = logging.getLogger(__name__)
 
-REPO = "blinkwise/blinkwise"
+REPO = "yuvalhod/blinkwise"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_URL = f"https://github.com/{REPO}/releases/latest"
 CHECK_EVERY_S = 24 * 3600

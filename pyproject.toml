@@ -36,7 +36,7 @@ dev = ["pytest>=7", "ruff>=0.4", "Pillow>=9"]
 blinkwise = "blinkwise.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/blinkwise/blinkwise"
+Homepage = "https://github.com/yuvalhod/blinkwise"
 
 [tool.setuptools.packages.find]
 where = ["src"]
