@@ -13,3 +13,4 @@ dist/
 .DS_Store
 packaging/face_landmarker.task
 packaging/Blinkwise.icns
+*.bundle
