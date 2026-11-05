@@ -43,6 +43,14 @@ The fixes are simple (blink fully, look far away regularly, sit at arm's length)
 
 **Mac app (no Python needed):** download `Blinkwise.dmg` from the latest release, drag Blinkwise to Applications and open it. It lives in your menu bar (the eye icon). The first launch asks for camera access and opens a 2-minute setup guide. Builds are produced by `.github/workflows/release-macos.yml` (`packaging/build_macos.sh`); until they're signed with a Developer ID, right-click > Open the first time.
 
+**Mac, one command (no admin password needed):**
+
+```bash
+git clone https://github.com/yuvalhod/blinkwise ~/blinkwise && bash ~/blinkwise/scripts/install_mac.sh
+```
+
+It installs a private Python 3.12 environment inside the folder (via [uv](https://github.com/astral-sh/uv)), installs Blinkwise, downloads the face model, checks your camera, and adds Blinkwise to your menu bar and login items. Undo with `~/blinkwise/.venv/bin/blinkwise uninstall-app` and delete the folder.
+
 **From Python (macOS, Windows, Linux):** requires Python 3.10+ and a webcam.
 
 Until the first PyPI release, install from source:

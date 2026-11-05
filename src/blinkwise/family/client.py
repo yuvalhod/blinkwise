@@ -119,8 +119,8 @@ class Uploader:
         except OSError:
             pass
 
-    def run(self, history, settings, now: float, send=upload) -> Optional[int]:
-        if not settings.family_token or not settings.family_url or not self.due(now):
+    def run(self, history, settings, now: float, send=upload, force: bool = False) -> Optional[int]:
+        if not settings.family_token or not settings.family_url or not (force or self.due(now)):
             return None
         weeks = preview(history, settings)
         self.mark(now)

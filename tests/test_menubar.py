@@ -83,6 +83,7 @@ def test_menu_flags_poor_tracking_and_icon_states():
 @pytest.mark.parametrize("platform", ["darwin", "win32", "linux"])
 def test_autostart_roundtrip(platform, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)   # Windows ignores HOME
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
     assert not autostart.is_enabled(platform)
@@ -103,7 +104,8 @@ def test_menu_actions_drive_the_app(tmp_path):
     app = App(Settings(), demo=True, ui=False, dashboard=False, tray=False,
               history_path=tmp_path / "h.sqlite", monitors=1)
     app._on_tray_action("pause:30")
-    assert app.paused.is_set() and 1790 < app._paused_until - __import__("time").monotonic() <= 1800
+    left = app._paused_until - __import__("time").monotonic()
+    assert app.paused.is_set() and 1790 < left <= 1800.01      # Windows' clock is coarse
     app._publish()
     snap = app.snapshot()
     assert snap["paused"] and 1790 <= snap["paused_for_s"] <= 1800

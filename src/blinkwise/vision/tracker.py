@@ -51,6 +51,17 @@ def _import_mediapipe():
     return mp, BaseOptions, vision
 
 
+def _ssl_context():
+    """certifi's CA bundle when available: some Python builds (python.org, uv) can't see
+    the macOS keychain, so the default context fails certificate checks."""
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def bundled_model() -> Optional[Path]:
     """The model shipped inside a packaged app (PyInstaller), if any: no download needed."""
     base = getattr(sys, "_MEIPASS", None)
@@ -78,7 +89,7 @@ def ensure_model(data_dir: Path, url: str = MODEL_URL) -> Path:
     data_dir.mkdir(parents=True, exist_ok=True)
     log.info("Downloading face model (3.7 MB, one time) from %s", url)
     with tempfile.NamedTemporaryFile(dir=data_dir, delete=False) as tmp:
-        with urllib.request.urlopen(url, timeout=60) as resp:  # noqa: S310 (fixed https URL)
+        with urllib.request.urlopen(url, timeout=60, context=_ssl_context()) as resp:  # noqa: S310
             shutil.copyfileobj(resp, tmp)
     digest = _sha256(Path(tmp.name))
     if digest != MODEL_SHA256:

@@ -26,6 +26,7 @@ dependencies = [
   "mediapipe>=0.10.14",
   "screeninfo>=0.8",
   "psutil>=5.9",
+  "certifi",
 ]
 
 [project.optional-dependencies]

@@ -18,6 +18,7 @@ class FamilyControl:
     def __init__(self, app):
         self.app = app
         self._uploader = None
+        self._upload_lock = threading.Lock()
 
     @property
     def s(self):
@@ -91,12 +92,11 @@ class FamilyControl:
     def maybe_upload(self, force: bool = False, send=client.upload) -> None:
         if self.app.history is None or not self.s.family_token:
             return
-        if self._uploader is None:
-            from ..config import data_dir
-            self._uploader = client.Uploader(data_dir() / ".family_upload")
-        if force:
-            self._uploader.mark(0.0)
-        status = self._uploader.run(self.app.history, self.s, time.time(), send=send)
+        with self._upload_lock:              # one upload at a time (pairing starts one too)
+            if self._uploader is None:
+                from ..config import data_dir
+                self._uploader = client.Uploader(data_dir() / ".family_upload")
+            status = self._uploader.run(self.app.history, self.s, time.time(), send=send, force=force)
         if status == 401:                     # the parent removed this computer
             self._save(family_url="", family_token="", family_name="", family_removed=True)
             self.app._publish_soon()
