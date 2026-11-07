@@ -112,7 +112,7 @@ def test_app_burst_cycle(tmp_path, monkeypatch):
     assert snap["camera_resting"] and 1 <= snap["camera_back_in_s"] <= 2
     assert build_menu(snap, blink_cue="subtle", autostart=None)[0].text.startswith(
         "Blinkwise: Camera resting")
-    assert app.engine.snapshot()["screen_minutes"] > 0.04     # carried through the rest
+    assert app.engine._screen_s > 1.5        # seconds, carried through the rest (not the rounded minutes)
     app.history.close()
 
 
