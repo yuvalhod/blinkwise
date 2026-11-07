@@ -35,6 +35,7 @@ def mac(monkeypatch):
         fake = FakeAV(answer)
         monkeypatch.setattr(sys, "platform", "darwin")
         monkeypatch.setitem(sys.modules, "AVFoundation", fake.module)
+        monkeypatch.setattr(mac_camera, "_av", lambda: fake.module)
         return fake
     return install
 
