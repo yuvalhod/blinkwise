@@ -138,8 +138,13 @@ class DashboardServer:
                 a = asset(u.path)
                 if a is not None:
                     return self._send(200, a[0], a[1])
+                if u.path in ("/privacy", "/terms"):
+                    from .. import legal
+                    return self._send(200, legal.page(u.path[1:]).encode(), "text/html; charset=utf-8")
                 if u.path == "/setup":
-                    html = setup_page.replace("__BLINKWISE_TOKEN__", server.token)
+                    from ..legal import TERMS_VERSION
+                    html = (setup_page.replace("__BLINKWISE_TOKEN__", server.token)
+                            .replace("__TERMS_VERSION__", TERMS_VERSION))
                     return self._send(200, html.encode(), "text/html; charset=utf-8")
                 if u.path == "/api/live":
                     snap = server.get_snapshot() if server.get_snapshot else None

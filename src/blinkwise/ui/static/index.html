@@ -108,7 +108,7 @@ svg text{fill:var(--faint);font:12px var(--text)}
 .daybar.ph{background:var(--phone)}
 .dayl{position:absolute;bottom:-20px;font-size:11px;color:var(--faint)}
 .hint{color:var(--faint);font-size:13px;margin:10px 2px 0}
-footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--ink);color:var(--muted);font-size:13px;display:flex;gap:8px;align-items:center}
+footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--ink);color:var(--muted);font-size:13px;display:flex;gap:8px 14px;align-items:center;flex-wrap:wrap}
 
 /* settings drawer */
 .scrim{position:fixed;inset:0;background:rgba(20,16,12,.38);opacity:0;pointer-events:none;transition:opacity .2s;z-index:2}
@@ -234,7 +234,8 @@ footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--ink);color:va
       </div>
     </section>
   </main>
-  <footer><svg class="i"><use href="#i-lock"/></svg> <span id="footText">Processed on this computer. No images stored or sent.</span></footer>
+  <footer><svg class="i"><use href="#i-lock"/></svg> <span id="footText">Processed on this computer. No images stored or sent.</span>
+    <span class="spacer"></span><span>Not a medical device</span><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -294,7 +295,7 @@ const EYE = {open: 1, target: 1, blinkAt: 0, gaze: 0, lastBlinks: null, raf: nul
 function verdictFor(rate){
   if (rate == null) return "Measuring over the first few minutes.";
   const pct = Math.round(rate / 17 * 100);
-  if (rate < 6) return `That's <b>very low</b>: about ${pct}% of a relaxed rate. Your eyes are drying out between blinks.`;
+  if (rate < 6) return `That's <b>very low</b>: about ${pct}% of a relaxed rate. Long gaps between blinks let the eye surface dry out.`;
   if (rate < 10) return `That's <b>low</b>: about ${pct}% of a relaxed rate. Screens do this to most people.`;
   if (rate < 15) return `Close. Relaxed eyes blink 15 to 20 times a minute.`;
   return `Healthy. Right in the relaxed range of 15 to 20.`;
@@ -410,7 +411,8 @@ async function refreshLive(){
 function renderBanner(d){
   const q = d.quality || {}, b = $("qbanner"), u = d.update;
   let html = null, info = false;
-  if (d.camera_error && !d.paused) html = `<b>Camera unavailable.</b> <span>Another app may be using it. Retrying.</span>`;
+  if (d.consent_needed){ info = true; html = `<b>The camera is off.</b> <span>Review the privacy policy and terms once to turn it on.</span> <a class="btn primary" href="/setup" style="margin-left:auto">Review and start</a>`; }
+  else if (d.camera_error && !d.paused) html = `<b>Camera unavailable.</b> <span>Another app may be using it. Retrying.</span>`;
   else if (d.in_call && d.call_mode !== "off" && !d.paused){ info = true; html = `<b>In a call.</b> <span>${d.call_mode === "pause" ? "Camera handed over until it ends." : "Reminders are quiet until it ends."}</span>`; }
   else if (q.level === "poor" && !d.paused) html = `<b>Can't see your eyes clearly.</b> <span>${esc((q.tips||[])[0] || "")}</span> <a class="btn" href="/setup" style="margin-left:auto">Fix</a>`;
   else if (u && /^https:\/\/github\.com\//.test(u.url)){ info = true; html = `<b>Blinkwise ${esc(u.version)} is available.</b> <a class="btn" href="${esc(u.url)}" target="_blank" rel="noopener" style="margin-left:auto">Get it</a>`; }

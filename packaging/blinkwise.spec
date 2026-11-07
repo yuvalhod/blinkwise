@@ -18,6 +18,7 @@ if not os.path.exists(model):
 
 datas = [
     (os.path.join(ROOT, "src/blinkwise/ui/static"), "blinkwise/ui/static"),
+    (os.path.join(ROOT, "src/blinkwise/legal"), "blinkwise/legal"),
     (model, "blinkwise/models"),
 ]
 datas += collect_data_files("mediapipe", includes=["**/*.so", "**/*.dylib", "**/*.dll", "**/*.binarypb"])

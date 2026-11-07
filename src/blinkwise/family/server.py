@@ -111,6 +111,13 @@ class FamilyStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._db.executescript(SCHEMA)
+        # Consent records (added after the first release; older databases get the columns).
+        for table, col in (("parents", "terms_version TEXT"), ("parents", "terms_at INTEGER"),
+                           ("children", "consent_at INTEGER")):
+            try:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass                                # already there
         self._db.commit()
         self._lock = threading.Lock()
 
@@ -138,7 +145,12 @@ class FamilyStore:
         return row[0]
 
     def parent_for(self, email: str, now: float) -> int:
+        """Sign-in links are only issued after the Terms/Privacy box is ticked, so a used
+        link is a record of agreement: store which version and when."""
+        from ..legal import TERMS_VERSION
         self.q("INSERT OR IGNORE INTO parents (email, created) VALUES (?,?)", (email, int(now)))
+        self.q("UPDATE parents SET terms_version=?, terms_at=? WHERE email=? AND "
+               "(terms_version IS NULL OR terms_version<>?)", (TERMS_VERSION, int(now), email, TERMS_VERSION))
         return self.q("SELECT id FROM parents WHERE email=?", (email,))[0][0]
 
     def new_session(self, parent_id: int, now: float) -> str:
@@ -157,8 +169,8 @@ class FamilyStore:
     # -- children ----------------------------------------------------------------
     def add_child(self, parent_id: int, name: str, now: float) -> Dict[str, Any]:
         code = new_code()
-        self.q("INSERT INTO children (parent_id, name, code, code_expires) VALUES (?,?,?,?)",
-               (parent_id, name, code, int(now + PAIR_TTL_S)))
+        self.q("INSERT INTO children (parent_id, name, code, code_expires, consent_at) VALUES (?,?,?,?,?)",
+               (parent_id, name, code, int(now + PAIR_TTL_S), int(now)))
         cid = self.q("SELECT id FROM children WHERE code=?", (code,))[0][0]
         return {"id": cid, "name": name, "code": code}
 
@@ -420,6 +432,9 @@ class FamilyServer:
                 a = asset(u.path)
                 if a is not None:
                     return self._send(200, a[0], a[1])
+                if u.path in ("/privacy", "/terms"):
+                    from .. import legal
+                    return self._send(200, legal.page(u.path[1:]).encode(), "text/html; charset=utf-8")
                 if u.path == "/healthz":
                     return self._json({"ok": True})
                 return self._send(404, b"not found", "text/plain")
@@ -433,6 +448,9 @@ class FamilyServer:
                     email = str(body.get("email", "")).strip().lower()
                     if not EMAIL_RE.match(email):
                         return self._json({"error": "Enter a valid email address."}, 400)
+                    if body.get("agree") is not True:
+                        return self._json({"error": "Please confirm you're an adult and agree to "
+                                                     "the Terms and Privacy Policy."}, 400)
                     if server.signin_limit.ok("ip:" + self._ip()) and server.signin_limit.ok("em:" + email):
                         token = server.store.new_link(email, now)
                         server.mailer.send(email, "Your Blinkwise sign-in link",
@@ -479,6 +497,9 @@ class FamilyServer:
                     name = re.sub(r"\s+", " ", str(body.get("name", ""))).strip()[:40]
                     if not name:
                         return self._json({"error": "Give your child a name or nickname."}, 400)
+                    if body.get("guardian") is not True:
+                        return self._json({"error": "Please confirm you're this child's parent or "
+                                                     "legal guardian and consent to sharing."}, 400)
                     if len(server.store.children(pid, now)) >= 10:
                         return self._json({"error": "Up to 10 children per account."}, 400)
                     return self._json(server.store.add_child(pid, name, now))
@@ -528,7 +549,9 @@ h2{font-size:28px}
 .chip.off{color:var(--faint)}
 .chip.on{color:var(--good)}
 .link{color:var(--hot);font-size:13.5px}
-label.check{display:flex;gap:8px;align-items:center;font-size:14px}
+label.check{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45}
+label.check input{margin-top:3px;flex:none;accent-color:var(--ink)}
+footer.legal{margin-top:28px;padding-top:14px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap}
 """
 
 _HEAD = """<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -542,15 +565,17 @@ SIGNIN_PAGE = _HEAD + """
 <p class="lead">Screen time, blink rate and breaks for each child, from Blinkwise on their computer. Sign in with your email; there's no password.</p>
 <div class="sheet">
 <!--MSG-->
-<form id="f" class="row"><input type="email" id="email" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><button class="primary">Email me a link</button></form>
+<form id="f"><div class="row"><input type="email" id="email" required placeholder="you@example.com" autocomplete="email" aria-label="Email"><button class="primary">Email me a link</button></div>
+<label class="check" style="margin-top:14px"><input type="checkbox" id="agree" required style="width:auto"> I'm 18 or older and agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Use</a> and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</label></form>
 <p id="sent" class="msg" hidden>Check your inbox for a sign-in link. It works once, for 15 minutes.</p>
 <p id="err" class="small" style="color:var(--hot)" hidden></p>
 </div>
 <p class="small muted">Only weekly totals are shared, never video, images or minute-by-minute data. Your child sees exactly what's shared, and when.</p>
+<footer class="legal"><span>Not a medical device</span><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
 </div><script>
 document.getElementById("f").onsubmit = async e => {
   e.preventDefault();
-  const r = await fetch("/auth/start", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({email: document.getElementById("email").value})});
+  const r = await fetch("/auth/start", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({email: document.getElementById("email").value, agree: document.getElementById("agree").checked})});
   const d = await r.json().catch(() => ({}));
   document.getElementById("err").hidden = r.ok; document.getElementById("err").textContent = d.error || "";
   document.getElementById("sent").hidden = !r.ok; if (r.ok) document.getElementById("f").hidden = true;
@@ -561,10 +586,12 @@ PARENT_PAGE = _HEAD.replace("<!--NAV-->", '<button id="out" class="ghost">Sign o
 <div id="kids"></div>
 <div class="sheet"><h2>Add a child</h2>
 <p class="muted small">You'll get a code to type into Blinkwise on their computer (Settings, Family).</p>
-<form id="add" class="row"><input id="name" maxlength="40" placeholder="Name or nickname" aria-label="Child's name"><button class="primary">Get a code</button></form></div>
+<form id="add"><div class="row"><input id="name" maxlength="40" placeholder="Name or nickname" aria-label="Child's name"><button class="primary">Get a code</button></div>
+<label class="check" style="margin-top:12px"><input type="checkbox" id="guardian" required style="width:auto"> I'm this child's parent or legal guardian. I consent to their computer sharing the weekly totals described in the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>, and I'll tell them it's on.</label></form></div>
 <div class="sheet"><div class="head"><h2>Monday email</h2><span class="sp"></span><label class="check"><input type="checkbox" id="digest" style="width:auto"> Send me the weekly totals</label></div>
 <p class="muted small" id="me"></p>
 <p class="small"><a href="#" id="del" class="link">Delete my account and all data</a></p></div>
+<footer class="legal"><span>Not a medical device</span><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
 </div><script>
 const H = {"Content-Type":"application/json","X-Blinkwise":"1"};
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -590,7 +617,7 @@ async function load(){
   document.querySelectorAll("[data-code]").forEach(b => b.onclick = async () => { await post(`/api/children/${b.dataset.code}/code`); load(); });
   document.querySelectorAll("[data-rm]").forEach(a => a.onclick = async e => { e.preventDefault(); if (confirm("Remove this child and delete their data?")) { await post(`/api/children/${a.dataset.rm}/remove`); load(); } });
 }
-document.getElementById("add").onsubmit = async e => { e.preventDefault(); const d = await post("/api/children", {name: document.getElementById("name").value}); if (d.error) alert(d.error); document.getElementById("name").value = ""; load(); };
+document.getElementById("add").onsubmit = async e => { e.preventDefault(); const d = await post("/api/children", {name: document.getElementById("name").value, guardian: document.getElementById("guardian").checked}); if (d.error) alert(d.error); document.getElementById("name").value = ""; load(); };
 document.getElementById("digest").onchange = e => post("/api/digest", {on: e.target.checked});
 document.getElementById("out").onclick = async () => { await post("/auth/signout"); location.href = "/"; };
 document.getElementById("del").onclick = async e => { e.preventDefault(); if (confirm("Delete your account, your children's links and all their data?")) { await post("/api/account/delete"); location.href = "/"; } };

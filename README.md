@@ -172,7 +172,13 @@ Every threshold lives in [`src/blinkwise/research.py`](src/blinkwise/research.py
 
 ## Not a medical device
 
-Blinkwise is a habit tool. It doesn't diagnose or treat anything. See an eye-care professional if you have persistent dryness, pain, redness or blurred vision.
+Blinkwise is a general wellness and habit tool. It doesn't diagnose, treat or prevent anything, its webcam estimates can be wrong, and it must never be used for safety decisions such as whether you're alert enough to drive. See an eye-care professional if you have persistent dryness, pain, redness or blurred vision.
+
+## Legal
+
+* [Privacy Policy](src/blinkwise/legal/privacy.md) and [Terms of Use](src/blinkwise/legal/terms.md), shown in the app and accepted once before the camera turns on.
+* Parents agree to the terms (18+) and confirm they're a child's parent or guardian before any sharing; both consents are recorded.
+* These documents are not legal advice; see [docs/TERMS.md](docs/TERMS.md) for what to review before a public launch.
 
 ## Roadmap
 

@@ -7,6 +7,7 @@ import pytest
 from blinkwise import system
 from blinkwise.app import App
 from blinkwise.config import Settings
+from blinkwise.legal import TERMS_VERSION
 from blinkwise.ui.menu import build_menu
 
 
@@ -100,7 +101,7 @@ def test_busy_camera_keeps_app_alive(tmp_path, monkeypatch):
     monkeypatch.setattr(cam, "FrameSource", Busy)
     monkeypatch.setattr(trk, "FaceTracker", Tracker)
     monkeypatch.setattr(trk, "ensure_model", lambda d: "model")
-    app = App(Settings(), ui=False, dashboard=False, tray=False,
+    app = App(Settings(terms_version=TERMS_VERSION), ui=False, dashboard=False, tray=False,
               history_path=tmp_path / "h.sqlite", monitors=1, probe=system.SystemState)
     import threading
     t = threading.Thread(target=app._worker_main)
@@ -153,7 +154,7 @@ def test_commands_are_handled_while_the_camera_is_off(tmp_path, monkeypatch):
     monkeypatch.setattr(trk, "FaceTracker", Tracker)
     monkeypatch.setattr(trk, "ensure_model", lambda d: "model")
     monkeypatch.setattr(cam, "FrameSource", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-    app = App(Settings(), ui=False, dashboard=False, tray=False,
+    app = App(Settings(terms_version=TERMS_VERSION), ui=False, dashboard=False, tray=False,
               history_path=tmp_path / "h.sqlite", monitors=1, probe=system.SystemState)
     app.pause()
     t = threading.Thread(target=app._worker_main)

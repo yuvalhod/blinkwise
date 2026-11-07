@@ -53,6 +53,9 @@ svg text{fill:var(--muted);font:11px var(--text)}
 .bar span{display:block;height:100%;width:0;background:var(--hot);transition:width .2s linear}
 .link{background:none;border:0;color:var(--hot);padding:0;font-weight:700;cursor:pointer;text-decoration:underline}
 .link:hover{background:none;color:var(--hot)}
+.agree{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;margin-top:14px;background:var(--paper);border:1px solid var(--rule);font-size:15px;cursor:pointer}
+.agree input{width:20px;height:20px;margin-top:2px;flex:none;accent-color:var(--ink)}
+footer.legal{margin-top:26px;font-size:13px;color:var(--muted);display:flex;gap:16px}
 </style>
 </head>
 <body>
@@ -61,6 +64,19 @@ svg text{fill:var(--muted);font:11px var(--text)}
   <h1>Set up Blinkwise</h1>
   <p class="lead">Two minutes. Nothing is recorded.</p>
   <div class="steps"><span id="s1" class="on"></span><span id="s2"></span><span id="s3"></span></div>
+
+  <section class="card hidden" id="step0">
+    <h2>Before the camera turns on</h2>
+    <ul class="tips">
+      <li><b>Everything stays on this computer.</b> Camera images are analysed in memory and discarded. They are never saved or sent anywhere.</li>
+      <li><b>Not a medical device.</b> Blinkwise estimates habits with a webcam to help you build better ones. It doesn't diagnose or treat anything, and its numbers can be wrong.</li>
+      <li><b>See an eye-care professional</b> for pain, redness, persistent dryness, blurred vision or any change in your sight.</li>
+      <li><b>Never use it for safety decisions</b>, such as whether you're alert enough to drive.</li>
+    </ul>
+    <p class="muted">Read the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="/terms" target="_blank" rel="noopener">Terms of Use</a>.</p>
+    <label class="agree"><input type="checkbox" id="agree"> I have read and agree to the Privacy Policy and Terms of Use, and I understand Blinkwise is not a medical device. If I'm under 18, my parent or guardian agrees too.</label>
+    <div class="row"><button class="primary" id="agreeBtn" disabled>Agree and turn on the camera</button></div>
+  </section>
 
   <section class="card" id="step1">
     <h2>1. Sit as you normally do</h2>
@@ -116,6 +132,7 @@ svg text{fill:var(--muted);font:11px var(--text)}
     </ul>
     <div class="row"><button class="primary" id="openDash">Open dashboard</button></div>
   </section>
+  <footer class="legal"><span>Not a medical device</span><a href="/privacy" target="_blank" rel="noopener">Privacy</a><a href="/terms" target="_blank" rel="noopener">Terms</a></footer>
 </div>
 
 <script>
@@ -192,7 +209,7 @@ function eyeSvg(done){
 
 function show(n){
   step = n;
-  ["step1","step2","step3","done","calib"].forEach((id,i) => $(id).classList.toggle("hidden", i+1 !== n));
+  ["step0","step1","step2","step3","done","calib"].forEach((id,i) => $(id).classList.toggle("hidden", i !== n));
   ["s1","s2","s3"].forEach((id,i) => $(id).classList.toggle("on", i < Math.min(n,3)));
   if (n === 2){ blinkBase = null; blinkStepAt = Date.now(); }
   if (n === 5) calReady();
@@ -298,7 +315,20 @@ if (location.hash === "#calibrate"){
   calFrom = 0; document.querySelector(".steps").hidden = true;
   document.querySelector("h1").textContent = "Blink detection"; document.querySelector(".lead").hidden = true;
   show(5);
-} else show(1);
+} else startGuide();
+
+async function startGuide(){
+  // The camera stays off until the current terms are accepted: show that step first.
+  let d = {};
+  try { d = await (await fetch("/api/live")).json(); } catch(e){}
+  show(d.consent_needed ? 0 : 1);
+}
+$("agree").onchange = e => { $("agreeBtn").disabled = !e.target.checked; };
+$("agreeBtn").onclick = async () => {
+  const r = await fetch("/api/settings", {method:"POST", headers:{"Content-Type":"application/json","X-Blinkwise-Token":TOKEN},
+                                          body: JSON.stringify({terms_version: "__TERMS_VERSION__"})});
+  if (r.ok) show(1); else alert("Couldn't save. Please try again.");
+};
 </script>
 </body>
 </html>

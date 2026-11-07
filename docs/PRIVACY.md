@@ -1,4 +1,8 @@
-# Privacy
+# Privacy: how it works
+
+The formal **Privacy Policy** is [src/blinkwise/legal/privacy.md](../src/blinkwise/legal/privacy.md)
+(also shown in the app at Dashboard > Privacy, and on the Family site at /privacy). This page
+explains the engineering behind it.
 
 Blinkwise points a camera at your face all day, so privacy isn't a feature. It's the precondition.
 

@@ -114,7 +114,7 @@ def fam(tmp_path):
 
 def sign_in(srv, web, email="parent@example.com"):
     n = len(srv.mailer.outbox)
-    assert web.req("POST", "/auth/start", {"email": email}, same_origin=False)[0] == 200
+    assert web.req("POST", "/auth/start", {"email": email, "agree": True}, same_origin=False)[0] == 200
     mail = srv.mailer.outbox[n]
     link = mail.text.split("\n")[2]
     status, _, r = web.req("GET", urlparse(link).path + "?" + urlparse(link).query)
@@ -126,7 +126,7 @@ def sign_in(srv, web, email="parent@example.com"):
 def test_magic_link_sign_in(fam):
     srv, url = fam
     web = Web(url)
-    assert web.req("POST", "/auth/start", {"email": "nope"})[0] == 400
+    assert web.req("POST", "/auth/start", {"email": "nope", "agree": True})[0] == 400
     assert web.req("GET", "/api/me")[0] == 401
     link = sign_in(srv, web)
     status, me, _ = web.req("GET", "/api/me")
@@ -145,7 +145,8 @@ def test_sign_in_is_rate_limited_without_revealing_it(fam):
     srv, url = fam
     web = Web(url)
     for _ in range(8):
-        assert web.req("POST", "/auth/start", {"email": "a@example.com"}, same_origin=False)[0] == 200
+        body = {"email": "a@example.com", "agree": True}
+        assert web.req("POST", "/auth/start", body, same_origin=False)[0] == 200
     assert len(srv.mailer.outbox) == 5
 
 
@@ -153,17 +154,17 @@ def test_csrf_protection(fam):
     srv, url = fam
     web = Web(url)
     sign_in(srv, web)
-    assert web.req("POST", "/api/children", {"name": "Sam"}, same_origin=False)[0] == 403
-    assert web.req("POST", "/api/children", {"name": "Sam"},
+    assert web.req("POST", "/api/children", {"name": "Sam", "guardian": True}, same_origin=False)[0] == 403
+    assert web.req("POST", "/api/children", {"name": "Sam", "guardian": True},
                    headers={"Origin": "https://evil.example"})[0] == 403
-    assert web.req("POST", "/api/children", {"name": "Sam"})[0] == 200
+    assert web.req("POST", "/api/children", {"name": "Sam", "guardian": True})[0] == 200
 
 
 def test_full_family_flow(fam):
     srv, url = fam
     parent = Web(url)
     sign_in(srv, parent)
-    status, kid, _ = parent.req("POST", "/api/children", {"name": "Sam"})
+    status, kid, _ = parent.req("POST", "/api/children", {"name": "Sam", "guardian": True})
     assert status == 200 and len(kid["code"]) == 9
     # The child's computer pairs with the code (any case / spacing).
     res = client.pair(url, kid["code"].lower().replace("-", " "))
@@ -204,7 +205,7 @@ def test_parent_removing_a_child_disconnects_the_device(fam):
     srv, url = fam
     parent = Web(url)
     sign_in(srv, parent)
-    kid = parent.req("POST", "/api/children", {"name": "Ana"})[1]
+    kid = parent.req("POST", "/api/children", {"name": "Ana", "guardian": True})[1]
     tok = client.pair(url, kid["code"])["token"]
     assert parent.req("POST", f"/api/children/{kid['id']}/remove")[0] == 200
     assert client.upload(url, tok, [{"v": 1, "week_start": "2026-11-02"}]) == 401
@@ -228,7 +229,7 @@ def test_app_family_control_end_to_end(fam, tmp_path):
     srv, url = fam
     parent = Web(url)
     sign_in(srv, parent)
-    kid = parent.req("POST", "/api/children", {"name": "Sam"})[1]
+    kid = parent.req("POST", "/api/children", {"name": "Sam", "guardian": True})[1]
 
     app = App(Settings(profile="young"), demo=True, ui=False, dashboard=False, tray=False,
               history_path=tmp_path / "h.sqlite", monitors=1)
@@ -279,7 +280,7 @@ def test_stop_sharing_with_pin(fam, tmp_path):
     srv, url = fam
     parent = Web(url)
     sign_in(srv, parent)
-    kid = parent.req("POST", "/api/children", {"name": "Lee"})[1]
+    kid = parent.req("POST", "/api/children", {"name": "Lee", "guardian": True})[1]
     app = App(Settings(), demo=True, ui=False, dashboard=False, tray=False,
               history_path=tmp_path / "h.sqlite", monitors=1)
     app.family.post({"op": "pair", "url": url, "code": kid["code"]})
@@ -342,3 +343,22 @@ def test_kids_mode_break_wording():
         texts = [ev.exercise for f in Simulation(Scenario(duration_s=330, fps=10)).frames()
                  for ev in eng.step(f) if isinstance(ev, BreakDue)]
         assert texts and word in texts[0]
+
+
+def test_consent_is_required_and_recorded(fam):
+    """Parents must agree to the terms (18+); adding a child needs guardian consent."""
+    srv, url = fam
+    web = Web(url)
+    status, res, _ = web.req("POST", "/auth/start", {"email": "p@example.com"}, same_origin=False)
+    assert status == 400 and "agree" in res["error"] and not srv.mailer.outbox
+    sign_in(srv, web, "p@example.com")
+    from blinkwise.legal import TERMS_VERSION
+    ver, at = srv.store.q("SELECT terms_version, terms_at FROM parents WHERE email=?", ("p@example.com",))[0]
+    assert ver == TERMS_VERSION and at
+    status, res, _ = web.req("POST", "/api/children", {"name": "Sam"})
+    assert status == 400 and "guardian" in res["error"]
+    assert web.req("POST", "/api/children", {"name": "Sam", "guardian": True})[0] == 200
+    assert srv.store.q("SELECT consent_at FROM children")[0][0]
+    for page in ("/privacy", "/terms"):
+        status, body, _ = web.req("GET", page)
+        assert status == 200 and b"Not a medical device" in body or b"not a medical device" in body.lower()

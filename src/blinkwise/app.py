@@ -111,8 +111,10 @@ class App:
                                           self._on_settings, family=self.family)
             url = self.server.start()
             print(f"Dashboard: {url}")
-            marker = data_dir() / ".setup_opened"
-            if not self.demo and not self.s.setup_done and not marker.exists():
+            from .legal import TERMS_VERSION
+            marker = data_dir() / (f".review_opened_{TERMS_VERSION}" if self.consent_needed
+                                   else ".setup_opened")
+            if not self.demo and (self.consent_needed or not self.s.setup_done) and not marker.exists():
                 # First run: teach camera placement. Once only, so a later login never
                 # pops a browser window up by itself (the menu has "Check camera setup").
                 webbrowser.open(url + "setup")
@@ -308,6 +310,7 @@ class App:
                     update=self.update_info if self.s.check_updates else None,
                     calibration=self.calib.state() if self.calib is not None else None,
                     calibrated=bool(self.s.blink_overrides),
+                    consent_needed=self.consent_needed,
                     camera_resting=self.burst_resting() and not self.paused.is_set(),
                     camera_back_in_s=(round(self.burst_back_in())
                                       if self.burst_resting() else None),
@@ -461,8 +464,15 @@ class App:
     def call_active(self) -> bool:
         return self.sys_state.call is not None and self.s.during_calls != "off"
 
+    @property
+    def consent_needed(self) -> bool:
+        """The camera stays off until the current Terms and Privacy Policy are accepted
+        (once; and again only if they change)."""
+        from .legal import TERMS_VERSION
+        return not self.demo and self.s.terms_version != TERMS_VERSION
+
     def camera_wanted(self) -> bool:
-        if self.paused.is_set():
+        if self.paused.is_set() or self.consent_needed:
             return False
         if self.call_active and self.s.during_calls == "pause":
             return False
@@ -582,7 +592,7 @@ class App:
         """Validated settings change from the dashboard; applied live, then saved."""
         changes = dict(changes)
         pin = changes.pop("pin", "")
-        if self.s.parent_pin and set(changes) - {"setup_done"}:
+        if self.s.parent_pin and set(changes) - {"setup_done", "terms_version"}:
             from .family.client import check_pin
             if not check_pin(str(pin), self.s.parent_pin):
                 raise PermissionError("parent PIN required")

@@ -66,6 +66,7 @@ EDITABLE = {
     "check_updates": [True, False],
     "sampling": ["continuous", "burst"],
     "performance": ["efficient", "max"],
+    "terms_version": None,                # validated against legal.TERMS_VERSION
 }
 
 
@@ -125,6 +126,7 @@ class Settings:
     family_share_checkin: bool = False    # also share the weekly eye check-in score
     family_removed: bool = False          # the parent removed this computer
     parent_pin: str = ""                  # salted PBKDF2 hash; locks settings in kids mode
+    terms_version: str = ""               # version of the Terms/Privacy Policy accepted
 
     @classmethod
     def path(cls) -> Path:
@@ -182,7 +184,11 @@ class Settings:
                 v = float(v)
             elif isinstance(cur, int):
                 v = int(v)
-            if rule is None:                      # daily_summary
+            if k == "terms_version":
+                from .legal import TERMS_VERSION
+                if v != TERMS_VERSION:
+                    raise ValueError("unknown terms version")
+            elif rule is None:                    # daily_summary
                 v = str(v).strip()
                 if v and not _valid_hhmm(v):
                     raise ValueError(f"{k} must be HH:MM or empty")

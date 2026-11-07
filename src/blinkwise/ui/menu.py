@@ -66,6 +66,8 @@ def duration(seconds: float) -> str:
 
 
 def status_title(snap: Dict[str, Any]) -> str:
+    if snap.get("consent_needed"):
+        return "Camera off until you review and start"
     call, mode = snap.get("in_call"), snap.get("call_mode", "quiet")
     if call and mode != "off" and not snap.get("paused"):
         return "In a call - camera off" if mode == "pause" else "In a call - quiet"
@@ -113,7 +115,9 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
         items.append(Item.line("Sharing weekly totals with a parent"))
     items.append(Item.sep())
 
-    if snap.get("break_active"):
+    if snap.get("consent_needed"):
+        items.append(Item(text="Review and start...", action="setup"))
+    elif snap.get("break_active"):
         items.append(Item(text="Skip this break", action="skip_break"))
     else:
         items.append(Item(text="Take a 20-second eye break", action="break_now",

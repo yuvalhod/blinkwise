@@ -11,6 +11,7 @@ from blinkwise.config import Settings
 from blinkwise.core.engine import Engine
 from blinkwise.core.events import BreakDue, StareCue
 from blinkwise.core.simulate import Scenario, Screen, Simulation
+from blinkwise.legal import TERMS_VERSION
 from blinkwise.ui.menu import build_menu
 
 ON, OFF = 60.0, 240.0
@@ -97,7 +98,7 @@ def test_app_burst_cycle(tmp_path, monkeypatch):
     monkeypatch.setattr(cam, "FrameSource", Cam)
     monkeypatch.setattr(trk, "FaceTracker", Tracker)
     monkeypatch.setattr(trk, "ensure_model", lambda d: "model")
-    app = App(Settings(sampling="burst"), ui=False, dashboard=False, tray=False,
+    app = App(Settings(sampling="burst", terms_version=TERMS_VERSION), ui=False, dashboard=False, tray=False,
               history_path=tmp_path / "h.sqlite", monitors=1, probe=system.SystemState)
     t = threading.Thread(target=app._worker_main)
     t.start()
