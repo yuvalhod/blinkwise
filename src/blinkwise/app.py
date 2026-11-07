@@ -90,6 +90,7 @@ class App:
         self._probe = probe
         self.sys_state = system.SystemState()
         self.camera_error: Optional[str] = None
+        self.camera_permission: Optional[str] = None   # macOS: authorized/denied/asking/...
         self.fps_now: Optional[float] = None
         self._cpu_mark = (time.monotonic(), time.process_time())
         self.cpu_pct: Optional[float] = None
@@ -218,6 +219,11 @@ class App:
                     self._publish()
                     time.sleep(0.2)
                     continue
+                if src is None and not self._camera_permitted():
+                    self._drain_commands()
+                    self._publish()
+                    time.sleep(1.0)              # re-check: you may allow it in System Settings
+                    continue
                 if src is None:
                     if time.monotonic() < retry_at:
                         self._drain_commands()
@@ -307,6 +313,7 @@ class App:
                     on_battery=self.sys_state.on_battery, battery_saver=self.battery_saving(),
                     fps_cap=self.fps_now if self.fps_now is not None else self.fps_cap(),
                     camera_error=self.camera_error, cpu_pct=self.cpu_pct,
+                    camera_permission=self.camera_permission,
                     update=self.update_info if self.s.check_updates else None,
                     calibration=self.calib.state() if self.calib is not None else None,
                     calibrated=bool(self.s.blink_overrides),
@@ -464,6 +471,23 @@ class App:
     def call_active(self) -> bool:
         return self.sys_state.call is not None and self.s.during_calls != "off"
 
+    def _camera_permitted(self) -> bool:
+        """macOS: ask for camera access through AVFoundation, which shows the real prompt
+        (OpenCV alone may fail without one), and wait while it's denied."""
+        if sys.platform != "darwin":
+            return True
+        from . import mac_camera
+        st = mac_camera.status()
+        if st == "not_determined":
+            self.camera_permission = "asking"
+            self._publish()
+            log.warning("asking macOS for camera access")
+            st = mac_camera.request()
+        if st != self.camera_permission:
+            log.warning("camera permission: %s", st)
+        self.camera_permission = st
+        return st not in ("denied", "restricted")
+
     @property
     def consent_needed(self) -> bool:
         """The camera stays off until the current Terms and Privacy Policy are accepted
@@ -538,6 +562,9 @@ class App:
         elif action == "dashboard":
             if self.server is not None:
                 webbrowser.open(self.server.url)
+        elif action == "camera_settings":
+            from . import mac_camera
+            mac_camera.open_settings()
         elif action == "checkin":
             if self.server is not None:
                 webbrowser.open(self.server.url + "#checkin")
@@ -609,7 +636,10 @@ class App:
         return self.s
 
     def _on_dashboard_action(self, action: str) -> Dict[str, Any]:
-        if action == "pause":
+        if action == "camera_settings":
+            from . import mac_camera
+            mac_camera.open_settings()
+        elif action == "pause":
             self.pause()
         elif action == "resume":
             self.resume()

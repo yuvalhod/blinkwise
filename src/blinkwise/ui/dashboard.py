@@ -22,7 +22,8 @@ from ..research import REFERENCES
 log = logging.getLogger(__name__)
 
 ALLOWED_ACTIONS = {"pause", "resume", "break_now", "skip_break", "wipe",
-                   "calibrate", "calibrate_save", "calibrate_cancel", "calibrate_reset"}
+                   "calibrate", "calibrate_save", "calibrate_cancel", "calibrate_reset",
+                   "camera_settings"}
 
 
 def _static(name: str) -> str:

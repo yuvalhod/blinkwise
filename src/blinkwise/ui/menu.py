@@ -76,6 +76,10 @@ def status_title(snap: Dict[str, Any]) -> str:
     if snap.get("paused"):
         until = snap.get("paused_for_s")
         return "Paused - camera off" + (f" ({duration(until)} left)" if until else "")
+    if snap.get("camera_permission") in ("denied", "restricted"):
+        return "Camera blocked - allow it in System Settings"
+    if snap.get("camera_permission") == "asking":
+        return "Waiting for camera permission"
     if snap.get("camera_resting") and not snap.get("paused"):
         return f"Camera resting (back in {duration(snap.get('camera_back_in_s') or 0)})"
     if snap.get("camera_error"):
@@ -117,6 +121,8 @@ def build_menu(snap: Dict[str, Any], *, blink_cue: str, autostart: Optional[bool
 
     if snap.get("consent_needed"):
         items.append(Item(text="Review and start...", action="setup"))
+    elif snap.get("camera_permission") in ("denied", "restricted"):
+        items.append(Item(text="Allow camera in System Settings...", action="camera_settings"))
     elif snap.get("break_active"):
         items.append(Item(text="Skip this break", action="skip_break"))
     else:

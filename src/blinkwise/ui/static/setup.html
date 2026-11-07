@@ -147,8 +147,19 @@ function evaluate(d){
   const yaw = median(hist.map(h => h.head_yaw)), pitch = median(hist.map(h => h.head_pitch_now));
   const dist = median(hist.map(h => h.distance_cm)), lum = d.luminance;
   const checks = [];
+  // Say what's actually wrong: blocked, waiting, busy or starting is not "no face".
+  const perm = d.camera_permission, settingsBtn = ` <button class="link" data-act="camera_settings">Open camera settings</button>`;
+  if (d.paused) { checks.push(["bad","The camera is paused","Resume it from the eye icon in your menu bar."]); return {checks, yaw, pitch}; }
+  if (perm === "denied" || perm === "restricted") {
+    checks.push(["bad","Blinkwise isn't allowed to use the camera",
+      "In System Settings > Privacy & Security > Camera, turn on Blinkwise (it may be listed as Python). If it isn't listed, quit Blinkwise from the menu bar and open it again." + settingsBtn]);
+    return {checks, yaw, pitch};
+  }
+  if (perm === "asking") { checks.push(["wait","Allow camera access","macOS is asking whether Blinkwise may use the camera. Click Allow in that window."]); return {checks, yaw, pitch}; }
+  if (d.camera_error) { checks.push(["bad","The camera won't start", "Another app (a video call?) may be using it. Blinkwise keeps retrying. " + esc(d.camera_error)]); return {checks, yaw, pitch}; }
+  if (!d.face && !d.fps) { checks.push(["wait","Starting the camera...","This takes a few seconds the first time."]); return {checks, yaw, pitch}; }
   checks.push(d.face ? ["ok","We can see you", d.people_in_view > 1 ? `${d.people_in_view} people in view; Blinkwise follows the person closest to the screen.` : ""]
-                     : ["bad","We can't find your face","Make sure the camera isn't covered and your face is in view."]);
+                     : ["bad","We can't find your face","The camera is on, but no face is in view. Sit in front of it, uncovered, with some light on your face."]);
   if (d.face){
     checks.push(d.eyes_hidden ? ["bad","We can't see your eyes","Take off sunglasses, or tilt your glasses or screen slightly so reflections don't cover your eyes."]
                               : ["ok","Both eyes are visible",""]);
@@ -273,7 +284,8 @@ async function poll(){
     const {checks, yaw} = evaluate(d);
     $("diagram").innerHTML = drawDiagram(yaw);
     $("checks").innerHTML = checks.map(([lvl,t,sub]) =>
-      `<li><span class="dot ${lvl}">${lvl==="ok"?"&#10003;":lvl==="warn"?"!":"&#215;"}</span><div><b>${t}</b>${sub?`<small>${sub}</small>`:""}</div></li>`).join("");
+      `<li><span class="dot ${lvl}">${lvl==="ok"?"&#10003;":lvl==="warn"?"!":lvl==="wait"?"&#8230;":"&#215;"}</span><div><b>${t}</b>${sub?`<small>${sub}</small>`:""}</div></li>`).join("");
+    document.querySelectorAll("#checks [data-act]").forEach(b => b.onclick = () => act(b.dataset.act));
     $("next1").disabled = !d.face || checks.some(c => c[0] === "bad");
     $("next1").textContent = checks.some(c => c[0] === "warn") ? "Good enough, next" : "Looks good, next";
   } else if (step === 2){

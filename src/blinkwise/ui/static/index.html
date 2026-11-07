@@ -412,12 +412,14 @@ function renderBanner(d){
   const q = d.quality || {}, b = $("qbanner"), u = d.update;
   let html = null, info = false;
   if (d.consent_needed){ info = true; html = `<b>The camera is off.</b> <span>Review the privacy policy and terms once to turn it on.</span> <a class="btn primary" href="/setup" style="margin-left:auto">Review and start</a>`; }
+  else if ((d.camera_permission === "denied" || d.camera_permission === "restricted") && !d.paused) html = `<b>Blinkwise isn't allowed to use the camera.</b> <span>Turn it on in System Settings &gt; Privacy &amp; Security &gt; Camera.</span> <button class="btn primary" id="camSettings" style="margin-left:auto">Open camera settings</button>`;
+  else if (d.camera_permission === "asking" && !d.paused){ info = true; html = `<b>Allow camera access.</b> <span>macOS is asking whether Blinkwise may use the camera.</span>`; }
   else if (d.camera_error && !d.paused) html = `<b>Camera unavailable.</b> <span>Another app may be using it. Retrying.</span>`;
   else if (d.in_call && d.call_mode !== "off" && !d.paused){ info = true; html = `<b>In a call.</b> <span>${d.call_mode === "pause" ? "Camera handed over until it ends." : "Reminders are quiet until it ends."}</span>`; }
   else if (q.level === "poor" && !d.paused) html = `<b>Can't see your eyes clearly.</b> <span>${esc((q.tips||[])[0] || "")}</span> <a class="btn" href="/setup" style="margin-left:auto">Fix</a>`;
   else if (u && /^https:\/\/github\.com\//.test(u.url)){ info = true; html = `<b>Blinkwise ${esc(u.version)} is available.</b> <a class="btn" href="${esc(u.url)}" target="_blank" rel="noopener" style="margin-left:auto">Get it</a>`; }
   b.hidden = html == null; b.classList.toggle("info", info);
-  if (html != null) b.innerHTML = html;
+  if (html != null && b.innerHTML !== html){ b.innerHTML = html; const cs = $("camSettings"); if (cs) cs.onclick = () => action("camera_settings"); }
 }
 
 function renderScreenTime(t){

@@ -107,7 +107,23 @@ def install(dest: Optional[Path] = None) -> Path:
     if dest.exists():
         uninstall(dest)
     build_bundle(dest)
+    sign(dest)
     return dest
+
+
+def sign(app: Path) -> bool:
+    """Ad-hoc code signature (no Apple account needed). Lets macOS's privacy system
+    remember the camera answer for Blinkwise.app reliably instead of re-asking or
+    silently denying an unsigned bundle."""
+    if sys.platform != "darwin":
+        return False
+    import subprocess
+    try:
+        r = subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)],
+                           capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
 
 
 def uninstall(dest: Optional[Path] = None) -> bool:
