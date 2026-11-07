@@ -32,6 +32,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     r.add_argument("--open", action="store_true", help="open the dashboard in your browser")
     r.add_argument("--no-tray", action="store_true", help="no menu-bar / system-tray icon")
     r.add_argument("--app", action="store_true", help=argparse.SUPPRESS)   # launched as Blinkwise.app
+    r.add_argument("--menubar-only", action="store_true",
+                   help="macOS: menu-bar icon and notifications only, no on-screen windows")
 
     d = sub.add_parser("demo", help="try Blinkwise without a camera (simulated user)")
     d.add_argument("--speed", type=float, default=1.0, help="simulation speed multiplier")
@@ -95,13 +97,61 @@ def cmd_run(args) -> int:
     s = Settings.load()
     if args.camera is not None:
         s.camera = args.camera
+    lock = _single_instance()
+    if lock is None:
+        print("Blinkwise is already running (look for the eye in your menu bar).")
+        return 0                       # not an error: the launcher shouldn't retry
     if getattr(args, "app", False):
         logging.getLogger().setLevel(logging.WARNING)  # app log: problems only, no activity
+        import platform
+        print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} Blinkwise {__version__} starting: "
+              f"Python {platform.python_version()} {platform.machine()}"
+              f"{' (menu bar only)' if args.menubar_only else ''}", flush=True)
+        if sys.platform == "darwin" and platform.machine() == "x86_64" and _apple_silicon():
+            print("Note: running an Intel Python under Rosetta (slower, more battery). "
+                  "Reinstall with scripts/install_mac.sh to get a native one.", flush=True)
     else:
         _first_run_notice()
-    App(s, ui=not args.no_ui, dashboard=not args.no_dashboard, open_browser=args.open,
-        tray=not args.no_tray).run()
-    return 0
+    app = App(s, ui=not args.no_ui, dashboard=not args.no_dashboard, open_browser=args.open,
+              tray=not args.no_tray, overlays=not args.menubar_only)
+    app.run()
+    if getattr(args, "app", False):
+        print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} Blinkwise stopped (code {app.exit_code})", flush=True)
+    return app.exit_code
+
+
+def _apple_silicon() -> bool:
+    import subprocess
+    try:
+        out = subprocess.run(["sysctl", "-n", "hw.optional.arm64"], capture_output=True,
+                             text=True, timeout=5).stdout.strip()
+        return out == "1"
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+_LOCK = None
+
+
+def _single_instance():
+    """Hold an exclusive lock for the app's lifetime; None if another copy has it.
+    (Login item + opening the app by hand must not start two cameras.)"""
+    global _LOCK
+    path = data_dir() / ".lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(path, "a+")
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return None
+    _LOCK = f
+    return f
 
 
 def cmd_demo(args) -> int:

@@ -32,8 +32,24 @@ fi
 uv --version
 
 say "2/6  Python 3.12 environment in $REPO_DIR/.venv"
-uv venv --python 3.12 --allow-existing .venv
+# Stop a running copy first (reinstalls replace the environment it runs from).
+pkill -f "Blinkwise.app/Contents/MacOS/Blinkwise" 2>/dev/null || true
+pkill -f "blinkwise run --app" 2>/dev/null || true
+# Use uv's own native Python, never one already on the machine: an Anaconda or Homebrew
+# Python can be an Intel build that runs under Rosetta (slower, more battery, and macOS
+# is phasing Intel apps out).
+if [[ "$(sysctl -n hw.optional.arm64 2>/dev/null)" == "1" ]]; then
+  WANT_ARCH=arm64; PYSPEC=cpython-3.12-macos-aarch64-none
+else
+  WANT_ARCH=x86_64; PYSPEC=cpython-3.12-macos-x86_64-none
+fi
+uv python install "$PYSPEC"
+rm -rf .venv
+uv venv --python "$PYSPEC" --python-preference only-managed .venv
 PY="$REPO_DIR/.venv/bin/python"
+GOT_ARCH="$("$PY" -c 'import platform; print(platform.machine())')"
+[[ "$GOT_ARCH" == "$WANT_ARCH" ]] || fail "Got a $GOT_ARCH Python on a $WANT_ARCH Mac. Please report this."
+echo "Python $("$PY" -c 'import platform; print(platform.python_version())') ($GOT_ARCH, native)"
 "$PY" -c 'import tkinter' 2>/dev/null && echo "Tk available (on-screen blink cue and break cards)." \
   || echo "Tk not available: Blinkwise will use notifications instead of on-screen cards."
 
@@ -49,7 +65,22 @@ echo "(macOS may ask whether Terminal can use the camera: click Allow.)"
 
 say "6/6  Menu-bar app"
 "$REPO_DIR/.venv/bin/blinkwise" install-app --login
+LOG="$HOME/Library/Logs/Blinkwise.log"
+before=$(wc -l < "$LOG" 2>/dev/null || echo 0)
 open "$HOME/Applications/Blinkwise.app"
+echo "Starting Blinkwise (macOS will ask once whether Blinkwise may use the camera: click Allow)..."
+ok=""
+for _ in $(seq 1 40); do
+  sleep 1
+  if tail -n +"$((before + 1))" "$LOG" 2>/dev/null | grep -q "menu-bar icon ready"; then ok=1; break; fi
+done
+if [[ -n "$ok" ]]; then
+  echo "The eye icon is in your menu bar."
+else
+  echo "The menu-bar icon hasn't reported in yet. Last lines of $LOG:"
+  tail -n 25 "$LOG" 2>/dev/null || echo "(no log yet)"
+  echo "If you have many menu-bar icons, it may be hidden behind the notch: hold Cmd and drag icons to make room."
+fi
 
 cat <<EOF
 

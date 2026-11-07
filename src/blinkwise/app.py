@@ -44,6 +44,7 @@ IDLE_FPS = 2.0
 LOW_RES = (640, 360)        # enough for faces at normal distance (validated on 768x432 video)
 HIGH_RES = (1280, 720)      # used when your face is small in the image (far from the camera)
 SMALL_FACE_PX = 100.0
+EXIT_MENUBAR_ONLY = 75      # tells the macOS launcher to restart with --menubar-only
 SYSTEM_POLL_S = 5.0   # how often to check battery and video calls
 CAMERA_RETRY_S = 5.0
 BURST_ON_S = 60.0     # burst sampling: camera on for 1 minute...
@@ -54,7 +55,7 @@ class App:
     def __init__(self, settings: Settings, *, demo: bool = False, demo_speed: float = 1.0,
                  ui: bool = True, dashboard: bool = True, open_browser: bool = False,
                  history_path: Optional[Path] = None, monitors: Optional[int] = -1,
-                 tray: bool = True, probe=system.probe):
+                 tray: bool = True, probe=system.probe, overlays: bool = True):
         self.s = settings
         self.demo = demo
         self.demo_speed = max(0.1, demo_speed)
@@ -77,7 +78,9 @@ class App:
         self.server = None
         self.error: Optional[BaseException] = None
         self.want_tray = tray
+        self.want_overlays = overlays          # False: menu-bar icon + notifications only
         self.tray = None
+        self.exit_code = 0
         self._paused_until: Optional[float] = None    # monotonic time to auto-resume
         self._quiet_until: Optional[float] = None     # monotonic time quiet mode ends
         self._summary_check = 0.0
@@ -108,8 +111,16 @@ class App:
                                           self._on_settings, family=self.family)
             url = self.server.start()
             print(f"Dashboard: {url}")
-            if not self.demo and not self.s.setup_done:
-                webbrowser.open(url + "setup")      # first run: teach camera placement
+            marker = data_dir() / ".setup_opened"
+            if not self.demo and not self.s.setup_done and not marker.exists():
+                # First run: teach camera placement. Once only, so a later login never
+                # pops a browser window up by itself (the menu has "Check camera setup").
+                webbrowser.open(url + "setup")
+                try:
+                    marker.parent.mkdir(parents=True, exist_ok=True)
+                    marker.write_text("1")
+                except OSError:
+                    pass
             elif self.open_browser:
                 webbrowser.open(url)
         worker = threading.Thread(target=self._worker_main, name="vision", daemon=True)
@@ -119,7 +130,7 @@ class App:
         if sys.platform != "darwin":
             self._start_tray()                 # background thread next to Tk
         try:
-            if self.want_ui and self._run_tk():   # macOS: the tray attaches inside _run_tk
+            if self.want_ui and self.want_overlays and self._run_tk():   # macOS: tray attaches here
                 pass
             elif sys.platform == "darwin" and self._start_tray(owns_main=True):
                 # macOS without Tk: the menu-bar item owns the main thread.
@@ -557,6 +568,10 @@ class App:
             log.exception("could not create the tray icon")
             self.tray = None
             return False
+        def report():
+            if self.tray is not None and self.tray.ready.wait(30):
+                print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} menu-bar icon ready", flush=True)
+        threading.Thread(target=report, name="tray-report", daemon=True).start()
         if sys.platform != "darwin":
             self.tray.start_background()
         elif not owns_main:
@@ -619,6 +634,15 @@ class App:
             # Tk created the NSApplication; the menu-bar item joins its event loop, and
             # every tray update is marshalled onto this thread through the event queue.
             self._start_tray(dispatch=lambda fn: self.events.put(("call", fn)))
+
+            def watchdog():
+                # The menu bar is the app on macOS. If the icon didn't appear next to Tk,
+                # exit with a code the launcher answers by restarting in menu-bar-only mode.
+                if self.want_tray and self.s.tray and (self.tray is None or not self.tray.ready.is_set()):
+                    log.error("menu-bar icon did not appear alongside Tk; restarting menu-bar only")
+                    self.exit_code = EXIT_MENUBAR_ONLY
+                    self.stop.set()
+            root.after(15000, watchdog)
         cue = overlay.BlinkCue(root)
         card = overlay.BreakCard(root, on_done=self.commands.put)
         toast = overlay.Toast(root, self.server.url if self.server else None)

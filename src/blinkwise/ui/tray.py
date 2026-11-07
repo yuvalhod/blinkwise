@@ -69,6 +69,7 @@ class Tray:
         self._state: tuple = ("open", False)
         self._blinking = False
         self._stop = threading.Event()
+        self.ready = threading.Event()   # set once the status item is actually visible
         self._dispatch = dispatch
         kwargs = {}
         if IS_MAC and dispatch is not None:
@@ -83,10 +84,14 @@ class Tray:
     # ------------------------------------------------------------ lifecycle
     def run_blocking(self, setup: Optional[Callable[[], None]] = None) -> None:
         """Own the main thread (macOS)."""
-        def _setup(icon):
-            icon.visible = True
+        def show():                          # on the main thread (see attach)
+            self.icon.visible = True
             self._hide_dock_icon()
             self._make_template()
+            self.ready.set()
+
+        def _setup(icon):
+            self._main(show)
             threading.Thread(target=self._refresh_loop, name="tray-refresh", daemon=True).start()
             if setup:
                 setup()
@@ -94,18 +99,28 @@ class Tray:
 
     def attach(self) -> None:
         """macOS with Tk: register the status item on Tk's app loop (call before mainloop)."""
+        def show():
+            # AppKit only accepts UI changes on the main thread; made from pystray's setup
+            # thread, macOS can silently ignore them and the icon never appears.
+            self.icon.visible = True
+            self._hide_dock_icon()
+            self._make_template()
+            self.ready.set()
+
         def _setup(icon):
-            icon.visible = True
-            self._main(self._hide_dock_icon)
-            self._main(self._make_template)
+            self._main(show)
         self.icon.run_detached(setup=_setup)
         threading.Thread(target=self._refresh_loop, name="tray-refresh", daemon=True).start()
 
     def start_background(self) -> None:
         """Run in a worker thread (Windows/Linux)."""
+        def _setup(icon):
+            icon.visible = True
+            self.ready.set()
+
         def _run():
             try:
-                self.icon.run(setup=lambda icon: setattr(icon, "visible", True))
+                self.icon.run(setup=_setup)
             except Exception:
                 log.exception("tray stopped")
         threading.Thread(target=_run, name="tray", daemon=True).start()

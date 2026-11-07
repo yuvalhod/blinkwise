@@ -30,3 +30,24 @@ def test_install_and_uninstall_commands(tmp_path, monkeypatch, capsys):
     assert main(["uninstall-app"]) == 0
     assert not (tmp_path / "Applications/Blinkwise.app").exists()
     assert "Removed" in capsys.readouterr().out
+
+
+def test_launcher_keeps_blinkwise_running():
+    from blinkwise.macos import launcher_script
+    s = launcher_script("/Users/me/blinkwise/.venv/bin/python")
+    assert "while true" in s and "--menubar-only" in s
+    assert '[ "$code" -eq 0 ] && exit 0' in s          # Quit from the menu stops it
+    assert "trap" in s and "TERM" in s                  # logging out stops it
+    assert '[ "$fails" -ge 5 ] && exit 1' in s          # no endless crash loop
+
+
+def test_only_one_copy_runs(tmp_path, monkeypatch):
+    from blinkwise import cli
+    monkeypatch.setenv("BLINKWISE_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_LOCK", None)
+    first = cli._single_instance()
+    assert first is not None
+    assert cli._single_instance() is None              # a second copy backs off
+    first.close()
+    monkeypatch.setattr(cli, "_LOCK", None)
+    assert cli._single_instance() is not None          # free again once the first exits
