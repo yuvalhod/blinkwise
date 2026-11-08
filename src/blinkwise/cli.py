@@ -6,6 +6,7 @@ import argparse
 import dataclasses
 import json
 import logging
+import os
 import statistics
 import sys
 import textwrap
@@ -66,6 +67,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub.add_parser("uninstall-app", help="macOS: remove Blinkwise.app and its login item")
 
     sub.add_parser("doctor", help="check that camera, model and UI work on this machine")
+    sub.add_parser("diagnose", help="print what's running and why (paste this when reporting a problem)")
     fs = sub.add_parser("family-server", help="run the parent-account server for family sharing")
     fs.add_argument("--host", default="127.0.0.1")
     fs.add_argument("--port", type=int, default=8790)
@@ -87,7 +89,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "dashboard": cmd_dashboard, "calibrate": cmd_calibrate, "config": cmd_config,
         "doctor": cmd_doctor, "science": cmd_science, "wipe": cmd_wipe, "selftest": cmd_selftest,
         "install-app": cmd_install_app, "uninstall-app": cmd_uninstall_app,
-        "family-server": cmd_family_server,
+        "family-server": cmd_family_server, "diagnose": cmd_diagnose,
     }[cmd](args)
 
 
@@ -375,6 +377,81 @@ def cmd_config(args) -> int:
         print(f"Saved {s.save()}")
     for k, v in s.public_dict().items():
         print(f"  {k} = {v}")
+    return 0
+
+
+def cmd_diagnose(args) -> int:
+    """Everything needed to understand a problem, in one paste. Nothing here is sent."""
+    import platform
+    import subprocess
+    import urllib.request
+
+    def run(cmd):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            return (r.stdout + r.stderr).strip()     # some tools (codesign) print to stderr
+        except (OSError, subprocess.SubprocessError):
+            return ""
+
+    root = Path(__file__).resolve().parents[2]
+    s = Settings.load()
+    from .legal import TERMS_VERSION
+    commit = run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"])
+    print(f"Blinkwise {__version__} (commit {commit if len(commit) < 12 else '?'})")
+    print(f"Python {platform.python_version()} {platform.machine()} at {sys.executable}")
+    print(f"System {platform.platform()}")
+    if sys.platform == "darwin" and platform.machine() == "x86_64" and _apple_silicon():
+        print("  !! Intel Python under Rosetta: rerun scripts/install_mac.sh")
+    print(f"Data folder {data_dir()}")
+    print(f"Terms accepted: {s.terms_version == TERMS_VERSION} ({s.terms_version or 'never'}); "
+          f"setup done: {s.setup_done}")
+    model = data_dir() / "face_landmarker.task"
+    print(f"Face model: {'present' if model.exists() else 'missing'}")
+    if sys.platform == "darwin":
+        from . import mac_camera
+        from .macos import default_location
+        print(f"Camera permission (this process): {mac_camera.status() or 'unknown (PyObjC missing?)'}")
+        app = default_location()
+        print(f"App bundle: {app if app.exists() else 'not installed'}")
+        if app.exists():
+            launcher = (app / "Contents" / "MacOS" / "Blinkwise").read_text(errors="replace")
+            py = [w for w in launcher.split() if w.endswith("python") or "/python" in w]
+            print(f"  runs: {py[0] if py else '?'}")
+            sig = run(["codesign", "-dv", str(app)])
+            print(f"  signature: {'ad-hoc' if 'adhoc' in sig else (sig.splitlines() or ['none'])[-1][:80]}")
+        agent = Path.home() / "Library" / "LaunchAgents" / "com.blinkwise.agent.plist"
+        print(f"Start at login: {'yes' if agent.exists() else 'no'}")
+    procs = []
+    try:
+        import psutil
+        for p in psutil.process_iter(["pid", "cmdline"]):
+            cmd = " ".join(p.info.get("cmdline") or [])
+            if p.info["pid"] != os.getpid() and ("-m blinkwise" in cmd or "Blinkwise.app" in cmd):
+                procs.append(f"{p.info['pid']} {cmd[:150]}")
+    except Exception as e:
+        procs.append(f"(couldn't list: {e})")
+    print("Running Blinkwise processes:" + ("".join("\n  " + x for x in procs) if procs else " none"))
+    print("Dashboards answering:")
+    found = False
+    for port in sorted(set(range(8765, 8776)) | set(range(s.dashboard_port, s.dashboard_port + 11))):
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/api/live")
+            with urllib.request.urlopen(req, timeout=1.5) as r:
+                d = json.loads(r.read())
+        except Exception:
+            continue
+        found = True
+        keys = ("version", "running", "consent_needed", "paused", "camera_permission", "camera_error",
+                "engine_error", "face", "fps")
+        print(f"  port {port}: " + ", ".join(f"{k}={d.get(k)!r}" for k in keys))
+    if not found:
+        print("  none")
+    log_path = Path.home() / "Library" / "Logs" / "Blinkwise.log"
+    if log_path.exists():
+        lines = log_path.read_text(errors="replace").splitlines()[-30:]
+        print(f"Last {len(lines)} lines of {log_path}:")
+        for ln in lines:
+            print("  " + ln)
     return 0
 
 

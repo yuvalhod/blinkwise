@@ -235,7 +235,7 @@ footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--ink);color:va
     </section>
   </main>
   <footer><svg class="i"><use href="#i-lock"/></svg> <span id="footText">Processed on this computer. No images stored or sent.</span>
-    <span class="spacer"></span><span>Not a medical device</span><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
+    <span class="spacer"></span><span id="ver"></span><span>Not a medical device</span><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -382,6 +382,7 @@ function renderStatus(d){
 async function refreshLive(){
   let d; try { d = await (await fetch("/api/live")).json(); } catch(e){ $("statusText").textContent = "Offline"; return; }
   live = d; renderStatus(d);
+  $("ver").textContent = d.version ? "v" + d.version : "";
   if (!d.running) return;
   $("pauseBtn").hidden = false; $("breakBtn").hidden = false;
   $("pauseBtn").innerHTML = `<svg class="i"><use href="#${d.paused ? "i-play" : "i-pause"}"/></svg>`;
@@ -412,6 +413,7 @@ function renderBanner(d){
   const q = d.quality || {}, b = $("qbanner"), u = d.update;
   let html = null, info = false;
   if (d.consent_needed){ info = true; html = `<b>The camera is off.</b> <span>Review the privacy policy and terms once to turn it on.</span> <a class="btn primary" href="/setup" style="margin-left:auto">Review and start</a>`; }
+  else if (d.engine_error) html = `<b>Blinkwise couldn't start its camera engine.</b> <span>${esc(d.engine_error)} Retrying every 30 seconds.</span>`;
   else if ((d.camera_permission === "denied" || d.camera_permission === "restricted") && !d.paused) html = `<b>Blinkwise isn't allowed to use the camera.</b> <span>Turn it on in System Settings &gt; Privacy &amp; Security &gt; Camera.</span> <button class="btn primary" id="camSettings" style="margin-left:auto">Open camera settings</button>`;
   else if (d.camera_permission === "asking" && !d.paused){ info = true; html = `<b>Allow camera access.</b> <span>macOS is asking whether Blinkwise may use the camera.</span>`; }
   else if (d.camera_error && !d.paused) html = `<b>Camera unavailable.</b> <span>Another app may be using it. Retrying.</span>`;

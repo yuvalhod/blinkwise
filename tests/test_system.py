@@ -165,3 +165,36 @@ def test_commands_are_handled_while_the_camera_is_off(tmp_path, monkeypatch):
     t.join(3)
     assert app.engine.breaks.micro_s == 30 * 60 and app.commands.empty()
     app.history.close()
+
+
+def test_engine_failure_keeps_app_alive_and_explains(tmp_path, monkeypatch):
+    """A broken model or camera library must not quit the app: report it and retry."""
+    import threading
+
+    import blinkwise.vision.tracker as trk
+    from blinkwise import app as app_mod
+
+    def broken(*a, **k):
+        raise FileNotFoundError("Unable to open file at /nope/model.task")
+
+    monkeypatch.setattr(trk, "ensure_model", broken)
+    monkeypatch.setattr(app_mod, "ENGINE_RETRY_S", 0.2)
+    app = App(Settings(terms_version=TERMS_VERSION), ui=False, dashboard=False, tray=False,
+              history_path=tmp_path / "h.sqlite", monitors=1, probe=system.SystemState)
+    t = threading.Thread(target=app._worker_main)
+    t.start()
+    time.sleep(0.7)
+    snap = app.snapshot()
+    alive = t.is_alive()
+    app.stop.set()
+    t.join(3)
+    assert alive and app.error is None          # still running, nothing raised
+    assert "model.task" in snap["engine_error"] and snap["version"]
+    app.history.close()
+
+
+def test_diagnose_runs(capsys):
+    from blinkwise import cli
+    assert cli.main(["diagnose"]) == 0
+    out = capsys.readouterr().out
+    assert "Blinkwise" in out and "Dashboards answering" in out and "Terms accepted" in out

@@ -1,3 +1,3 @@
 """Blinkwise: a private, on-device webcam coach for healthier screen habits."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

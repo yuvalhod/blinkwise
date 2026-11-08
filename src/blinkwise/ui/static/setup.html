@@ -132,7 +132,7 @@ footer.legal{margin-top:26px;font-size:13px;color:var(--muted);display:flex;gap:
     </ul>
     <div class="row"><button class="primary" id="openDash">Open dashboard</button></div>
   </section>
-  <footer class="legal"><span>Not a medical device</span><a href="/privacy" target="_blank" rel="noopener">Privacy</a><a href="/terms" target="_blank" rel="noopener">Terms</a></footer>
+  <footer class="legal"><span id="ver"></span><span>Not a medical device</span><a href="/privacy" target="_blank" rel="noopener">Privacy</a><a href="/terms" target="_blank" rel="noopener">Terms</a></footer>
 </div>
 
 <script>
@@ -150,6 +150,7 @@ function evaluate(d){
   // Say what's actually wrong: blocked, waiting, busy or starting is not "no face".
   const perm = d.camera_permission, settingsBtn = ` <button class="link" data-act="camera_settings">Open camera settings</button>`;
   if (d.paused) { checks.push(["bad","The camera is paused","Resume it from the eye icon in your menu bar."]); return {checks, yaw, pitch}; }
+  if (d.engine_error) { checks.push(["bad","Blinkwise couldn't start its camera engine", esc(d.engine_error) + " It tries again every 30 seconds."]); return {checks, yaw, pitch}; }
   if (perm === "denied" || perm === "restricted") {
     checks.push(["bad","Blinkwise isn't allowed to use the camera",
       "In System Settings > Privacy & Security > Camera, turn on Blinkwise (it may be listed as Python). If it isn't listed, quit Blinkwise from the menu bar and open it again." + settingsBtn]);
@@ -276,7 +277,17 @@ async function poll(){
   clearTimeout(pollTimer);
   pollTimer = setTimeout(poll, step === 5 && calRunning ? 100 : 500);   // cues need quick updates
   let d;
-  try { d = await (await fetch("/api/live")).json(); } catch(e){ return; }
+  try { d = await (await fetch("/api/live")).json(); }
+  catch(e){
+    // Don't leave stale results up when the app has stopped or restarted elsewhere.
+    if (step === 1){
+      $("checks").innerHTML = `<li><span class="dot bad">&#215;</span><div><b>Blinkwise isn't running</b><small>Open Blinkwise from Applications (or click the eye in your menu bar), then reload this page.</small></div></li>`;
+      $("next1").disabled = true;
+    }
+    $("ver").textContent = "";
+    return;
+  }
+  if (d.version) $("ver").textContent = "v" + d.version;
   if (!d.running) return;
   if (step === 5){ renderCal(d); return; }
   hist.push(d); if (hist.length > 6) hist.shift();

@@ -28,8 +28,8 @@ class FrameSource:
         if not self.cap.isOpened():
             raise RuntimeError(
                 f"Could not open {'video file' if self.is_file else 'camera'} {source!r}. "
-                "On macOS, grant camera access to your terminal in System Settings > "
-                "Privacy & Security > Camera.")
+                "Another app may be using it, or camera access is off for Blinkwise in "
+                "System Settings > Privacy & Security > Camera.")
         if not self.is_file:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)

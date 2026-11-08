@@ -19,7 +19,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from . import system
+from . import __version__, system
 from .config import Settings, data_dir
 from .core import summary
 from .core.engine import Engine
@@ -44,6 +44,7 @@ IDLE_FPS = 2.0
 LOW_RES = (640, 360)        # enough for faces at normal distance (validated on 768x432 video)
 HIGH_RES = (1280, 720)      # used when your face is small in the image (far from the camera)
 SMALL_FACE_PX = 100.0
+ENGINE_RETRY_S = 30.0
 EXIT_MENUBAR_ONLY = 75      # tells the macOS launcher to restart with --menubar-only
 SYSTEM_POLL_S = 5.0   # how often to check battery and video calls
 CAMERA_RETRY_S = 5.0
@@ -90,6 +91,7 @@ class App:
         self._probe = probe
         self.sys_state = system.SystemState()
         self.camera_error: Optional[str] = None
+        self.engine_error: Optional[str] = None
         self.camera_permission: Optional[str] = None   # macOS: authorized/denied/asking/...
         self.fps_now: Optional[float] = None
         self._cpu_mark = (time.monotonic(), time.process_time())
@@ -111,7 +113,7 @@ class App:
                                           self._on_dashboard_action, lambda: self.s,
                                           self._on_settings, family=self.family)
             url = self.server.start()
-            print(f"Dashboard: {url}")
+            print(f"Dashboard: {url}", flush=True)
             from .legal import TERMS_VERSION
             marker = data_dir() / (f".review_opened_{TERMS_VERSION}" if self.consent_needed
                                    else ".setup_opened")
@@ -166,16 +168,33 @@ class App:
 
     # ----------------------------------------------------------------- worker
     def _worker_main(self) -> None:
-        try:
-            if self.demo:
+        if self.demo:
+            try:
                 self._loop_demo()
-            else:
+            except BaseException as e:  # surface errors to the main thread
+                log.exception("vision loop crashed")
+                self.error = e
+            finally:
+                self.stop.set()
+            return
+        # The real app stays up when the camera engine fails (model, camera library,
+        # permissions): it says what went wrong and retries, instead of quitting and
+        # leaving a stale page behind.
+        while not self.stop.is_set():
+            try:
+                self._publish()
                 self._loop_camera()
-        except BaseException as e:  # surface errors to the main thread
-            log.exception("vision loop crashed")
-            self.error = e
-        finally:
-            self.stop.set()
+                return                                  # stopped normally
+            except Exception as e:
+                log.exception("camera engine failed; retrying in %.0f s", ENGINE_RETRY_S)
+                self.engine_error = f"{type(e).__name__}: {e}"
+                self._publish()
+                if self.stop.wait(ENGINE_RETRY_S):
+                    return
+            except BaseException as e:
+                self.error = e
+                self.stop.set()
+                return
 
     def _loop_demo(self) -> None:
         from .core.simulate import Simulation, demo_scenario
@@ -251,6 +270,7 @@ class App:
                     continue
                 t, frame = item
                 f = tracker.process(frame, t)
+                self.engine_error = None
                 self._carry = f
                 if f.face:
                     last_face = t
@@ -313,7 +333,8 @@ class App:
                     on_battery=self.sys_state.on_battery, battery_saver=self.battery_saving(),
                     fps_cap=self.fps_now if self.fps_now is not None else self.fps_cap(),
                     camera_error=self.camera_error, cpu_pct=self.cpu_pct,
-                    camera_permission=self.camera_permission,
+                    camera_permission=self.camera_permission, engine_error=self.engine_error,
+                    version=__version__,
                     update=self.update_info if self.s.check_updates else None,
                     calibration=self.calib.state() if self.calib is not None else None,
                     calibrated=bool(self.s.blink_overrides),

@@ -32,9 +32,18 @@ fi
 uv --version
 
 say "2/6  Python 3.12 environment in $REPO_DIR/.venv"
-# Stop a running copy first (reinstalls replace the environment it runs from).
-pkill -f "Blinkwise.app/Contents/MacOS/Blinkwise" 2>/dev/null || true
-pkill -f "blinkwise run --app" 2>/dev/null || true
+# Stop every running copy first (old versions keep serving their old pages otherwise, and
+# reinstalls replace the environment they run from).
+stop_old() {
+  pkill -f "Blinkwise.app/Contents/MacOS/Blinkwise" 2>/dev/null || true
+  pkill -f -- "-m blinkwise" 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    pgrep -f -- "-m blinkwise" >/dev/null || return 0
+    sleep 0.5
+  done
+  pkill -9 -f -- "-m blinkwise" 2>/dev/null || true
+}
+stop_old
 # Use uv's own native Python, never one already on the machine: an Anaconda or Homebrew
 # Python can be an Intel build that runs under Rosetta (slower, more battery, and macOS
 # is phasing Intel apps out).
@@ -74,8 +83,11 @@ for _ in $(seq 1 40); do
   sleep 1
   if tail -n +"$((before + 1))" "$LOG" 2>/dev/null | grep -q "menu-bar icon ready"; then ok=1; break; fi
 done
+URL="$(tail -n +"$((before + 1))" "$LOG" 2>/dev/null | grep -o 'Dashboard: http://127.0.0.1:[0-9]*/' | tail -1 | cut -d' ' -f2)"
 if [[ -n "$ok" ]]; then
   echo "The eye icon is in your menu bar."
+  # Open the setup guide from the copy that's running now (not an old browser tab).
+  [[ -n "$URL" ]] && open "${URL}setup"
 else
   echo "The menu-bar icon hasn't reported in yet. Last lines of $LOG:"
   tail -n 25 "$LOG" 2>/dev/null || echo "(no log yet)"
